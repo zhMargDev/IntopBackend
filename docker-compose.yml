@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  postgres:
+    build:
+      context: ./database
+      dockerfile: Dockerfile
+    environment:
+      POSTGRES_USER: intop
+      POSTGRES_PASSWORD: ai5JeI9ahng1ohV1  # Замените на ваш пароль
+      POSTGRES_DB: intop_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgres://intop:ai5JeI9ahng1ohV1@postgres:5432/intop_db
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgres://intop:ai5JeI9ahng1ohV1@postgres:5432/intop_db
+
+  nginx:
+    image: nginx:latest
+    volumes:
+      - ./api.intop.uz:/etc/nginx/conf.d/api.intop.uz
+      - ./admin.intop.uz:/etc/nginx/conf.d/admin.intop.uz
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+      - admin
+
+volumes:
+  postgres_data:

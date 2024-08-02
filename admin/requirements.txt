@@ -1,0 +1,10 @@
+# FastAPI and ASGI server
+fastapi
+uvicorn[standard]
+fastapi_admin
+
+# SQLAlchemy and database drivers
+sqlalchemy
+alembic
+psycopg2-binary
+
