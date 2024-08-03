@@ -7,12 +7,14 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import DeclarativeMeta
 from sqlalchemy import create_engine
 
-from api.models.models import User  # Импортируйте ваши модели из папки api
+from models.models import User, Base  # Импортируйте ваши модели из папки api
+from config import DB_CONNECT
+
 
 app = FastAPI()
 
 # Настройка SQLAlchemy
-DATABASE_URL = "postgresql://intop:ai5JeI9ahng1ohV1@postgres:5432/intop_db"
+DATABASE_URL = DB_CONNECT
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base: DeclarativeMeta = Base  # Это ваш Base из моделей

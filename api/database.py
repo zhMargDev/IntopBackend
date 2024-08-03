@@ -1,9 +1,12 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from models import Base
+from models.models import Base
+
+from config import DB_CONNECT
 
 # Создание подключения к базе данных
-engine = create_engine("postgresql://intop:ai5JeI9ahng1ohV1@localhost:5432/intop_db")
+
+engine = create_engine(DB_CONNECT)
 
 # Создание фабрики сессий
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

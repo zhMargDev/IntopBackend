@@ -1,11 +1,11 @@
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from database import get_db
-from models import User
+from models.models import User
 from utils.token import decode_access_token, update_token
 
 router = APIRouter()
@@ -101,6 +101,102 @@ async def get_user_data(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         # Возвращаем ошибку 401 Unauthorized при возникновении исключения
         raise HTTPException(status_code=401, detail="Ошибка при декодировании токена или получении данных пользователя")
+
+@router.get("/get_users_by", summary="Получение пользователей по параметрам",
+            description="""
+            Этот эндпоинт позволяет получить данные пользователей по различным параметрам. Вы можете отправить запрос с параметрами, такими как id, name, phone_number и другие, чтобы найти конкретного пользователя.
+
+            **Запрос:**
+
+            Отправьте GET-запрос на этот эндпоинт с параметрами запроса, например: ?id=1 или ?name=иван или ?id=2&phone_number=+134567890&name=иван.
+            Ключи для запроса:
+                id: int
+                telegram_id: int
+                role_id: int
+                username: str
+                first_name: str
+                second_name: str
+                phone_number: str
+                email: str
+            Примечание: Можно поставить несколько ключей с значением
+            **Ответ:**
+
+            В случае успешного выполнения запроса вы получите JSON-ответ с данными пользователей.
+
+            ```json
+            [
+                {
+                  "user_id": 123456,           # Уникальный идентификатор пользователя
+                  "telegram_id": 987654321,   # Идентификатор пользователя в Telegram
+                  "role_id": 1,               # Идентификатор роли пользователя
+                  "username": "ivan_ivanov",  # Имя пользователя в системе
+                  "first_name": "Иван",       # Имя пользователя
+                  "second_name": "Иванов",    # Фамилия пользователя
+                  "phone_number": "+1234567890",  # Номер телефона пользователя
+                  "email": "ivan@example.com",   # Электронная почта пользователя
+                  "avatar": "path/to/avatar.jpg",  # Путь к аватарке пользователя
+                  "last_active": "2024-08-02T12:34:56"  # Время последней активности пользователя
+                },
+                {...},
+                {...}
+            ]
+            ```
+
+            **Статусные коды:**
+
+            - **200 OK:** Данные пользователей успешно получены.
+            - **403 Forbidden:** Пользователей не было найдено по указанным параметрам.
+            - **500 Internal Server Error:** Ошибка при получении данных о пользователях.
+            """)
+async def get_users_by(
+    id: int = Query(None),
+    telegram_id: int = Query(None),
+    role_id: int = Query(None),
+    username: str = Query(None),
+    first_name: str = Query(None),
+    second_name: str = Query(None),
+    phone_number: str = Query(None),
+    email: str = Query(None),
+    db: Session = Depends(get_db)
+):
+    try:
+        query = db.query(User)
+
+        filters = {
+            User.id: id,
+            User.telegram_id: telegram_id,
+            User.role_id: role_id,
+            User.username: username,
+            User.first_name: first_name,
+            User.second_name: second_name,
+            User.phone_number: phone_number,
+            User.email: email,
+        }
+
+        for attr, value in filters.items():
+            if value is not None:
+                query = query.filter(attr == value)
+
+        users = query.all()
+
+        if not users:
+            raise HTTPException(status_code=403, detail="Пользователей не найден.")
+
+        return JSONResponse(content=[{
+            "user_id": user.id,
+            "telegram_id": user.telegram_id,
+            "role_id": user.role_id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "second_name": user.second_name,
+            "phone_number": user.phone_number,
+            "email": user.email,
+            "avatar": user.avatar,
+            "last_active": user.last_active.isoformat()
+        } for user in users])
+
+    except Exception:
+        raise HTTPException(status_code=500, detail="Ошибка при получении данных о пользователях")
 
 @router.put("/update_user", summary="Обновление данных пользователя",
             description="""

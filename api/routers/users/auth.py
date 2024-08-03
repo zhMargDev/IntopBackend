@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User
+from models.models import User
 from models.pydantic_models import TelegramInitData
 from utils.token import update_token
 
