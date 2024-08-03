@@ -2,7 +2,6 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
 
 from database import get_db
 from models.models import User

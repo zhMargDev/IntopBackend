@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from sqlalchemy import func
+from typing import Dict
 
 from database import get_db
 from models.models import User, Rating
@@ -47,33 +49,38 @@ router = APIRouter()
              - **400 Bad Request:** Оценка вне допустимого диапазона (1-5).
              - **404 Not Found:** Один или оба пользователя не найдены.
              """)
-def rate_user(rater_id: int, rated_id: int, rating: float, db: Session = Depends(get_db)):
+async def rate_user(rater_id: int, rated_id: int, rating: float, db: AsyncSession = Depends(get_db)) -> Dict[str, str]:
     # Проверка валидности рейтинга
     if rating < 1 or rating > 5:
         raise HTTPException(status_code=400, detail="Оценка должна быть от 1 до 5")
 
     # Проверка существования пользователя, который оставляет оценку
-    rater = db.query(User).filter(User.id == rater_id).first()
+    rater = await db.execute(select(User).filter(User.id == rater_id))
+    rater = rater.scalar_one_or_none()
     if rater is None:
         raise HTTPException(status_code=404, detail="Пользователь, оставляющий оценку, не найден.")
 
     # Проверка существования пользователя, которого оценивают
-    rated = db.query(User).filter(User.id == rated_id).first()
+    rated = await db.execute(select(User).filter(User.id == rated_id))
+    rated = rated.scalar_one_or_none()
     if rated is None:
         raise HTTPException(status_code=404, detail="Пользователь, который получает оценку, не найден.")
 
     # Добавление рейтинга
     new_rating = Rating(rater_id=rater_id, rated_id=rated_id, rating=rating)
-    db.add(new_rating)
-    db.commit()
+    async with db.begin():
+        db.add(new_rating)
 
     # Расчет средней оценки для оцененного пользователя
-    avg_rating = db.query(func.avg(Rating.rating)).filter(Rating.rated_id == rated_id).scalar()
+    avg_rating = await db.execute(select(func.avg(Rating.rating)).filter(Rating.rated_id == rated_id))
+    avg_rating = avg_rating.scalar_one_or_none()
     
     # Обновление средней оценки пользователя в таблице 'users'
     if avg_rating is not None:  # Проверка на случай, если нет рейтингов
-        db.query(User).filter(User.id == rated_id).update({User.rating: avg_rating})
-        db.commit()
+        async with db.begin():
+            await db.execute(
+                select(User).filter(User.id == rated_id).update({User.rating: avg_rating})
+            )
     else:
         raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
