@@ -1,12 +1,12 @@
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, Request, Query
+from fastapi import APIRouter, HTTPException, Depends, Request, Query, Body
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from database import get_db
 from models.models import User
-from models.schemas import UserList, UserOut, UserUpdate
+from models.schemas import UserList, UserOut, UserUpdate, DeleteUserRequest
 from utils.token import decode_access_token, update_token
 
 router = APIRouter()
@@ -208,8 +208,15 @@ async def update_user(request: Request, db: Session = Depends(get_db)):
             setattr(user, key, value)
 
         update_last_active(user, db)
+        db.commit()  # Не забудьте зафиксировать изменения в базе данных
 
-        return JSONResponse(content={"message": "Данные пользователя обновлены"})
+        # Обновите токен и добавьте его в куки
+        response_data = {"message": "Данные пользователя обновлены"}
+        new_token = update_token(request, response_data)  # Используем update_token для получения нового токена
+        response = JSONResponse(content=response_data)
+        response.set_cookie(key="access_token", value=new_token, httponly=True, secure=True)  # Устанавливаем новый токен в куки
+
+        return response
 
     except Exception as e:
         handle_exception(e)
@@ -258,25 +265,33 @@ async def get_all_users(db: Session = Depends(get_db)):
     except Exception as e:
         handle_exception(e)
 
-@router.delete("/delete_user/{user_id}", summary="Удаление пользователя",
-               description="""
-               Этот эндпоинт позволяет удалить пользователя по указанному идентификатору.
+@router.post("/delete_user", summary="Удаление пользователя",
+             description="""
+             Этот эндпоинт позволяет удалить пользователя по указанному идентификатору.
 
-               **Запрос:**
+             **Запрос:**
 
-               Отправьте DELETE-запрос на этот эндпоинт с идентификатором пользователя в пути и кукой, содержащей токен доступа.
+             Отправьте POST-запрос на этот эндпоинт с телом запроса в формате JSON, содержащим идентификатор пользователя и кукой, содержащей токен доступа.
 
-               **Ответ:**
+             **Тело запроса:**
 
-               В случае успешного выполнения запроса вы получите сообщение об успешном удалении пользователя.
+             ```json
+             {
+                 "user_id": 123
+             }
+             ```
 
-               **Статусные коды:**
+             **Ответ:**
 
-               - **200 OK:** Пользователь успешно удален.
-               - **401 Unauthorized:** Токен доступа отсутствует или недействителен.
-               - **404 Not Found:** Пользователь с указанным идентификатором не найден.
-               """)
-async def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)):
+             В случае успешного выполнения запроса вы получите сообщение об успешном удалении пользователя.
+
+             **Статусные коды:**
+
+             - **200 OK:** Пользователь успешно удален.
+             - **401 Unauthorized:** Токен доступа отсутствует или недействителен.
+             - **404 Not Found:** Пользователь с указанным идентификатором не найден.
+             """)
+async def delete_user(request: Request, db: Session = Depends(get_db), body: DeleteUserRequest = Body(...)):
     access_token = request.cookies.get("access_token")
     if not access_token:
         raise HTTPException(status_code=401, detail="Токен доступа не предоставлен")
@@ -286,14 +301,47 @@ async def delete_user(user_id: int, request: Request, db: Session = Depends(get_
         if not admin_id:
             raise HTTPException(status_code=401, detail="Недействительный токен доступа")
 
-        user = db.query(User).filter(User.id == user_id).first()
+        user = db.query(User).filter(User.id == body.user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
 
         db.delete(user)
         db.commit()
 
-        return JSONResponse(content={"message": "Пользователь удален"})
+        # Удалите токен из куки
+        response = JSONResponse(content={"message": "Пользователь удален"})
+        response.set_cookie(key="access_token", value="", expires=0, httponly=True, secure=True)  # Удаляем токен из куки
+
+        return response
+
+    except Exception as e:
+        handle_exception(e)
+
+@router.post("/log_out", summary="Выход из аккаунта",
+             description="Обновляет время последней активности пользователя и удаляет токен доступа из куки. "
+                         "После выполнения этого запроса пользователь будет полностью разлогинен, и токен будет удален.")
+async def log_out(request: Request, db: Session = Depends(get_db)):
+    access_token = request.cookies.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Токен доступа не предоставлен")
+
+    try:
+        user_id = decode_access_token(access_token)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Недействительный токен доступа")
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+        # Обновите время последней активности пользователя
+        update_last_active(user, db)
+
+        # Удалите токен из куки
+        response = JSONResponse(content={"message": "Вы успешно вышли из аккаунта"})
+        response.set_cookie(key="access_token", value="", expires=0, httponly=True, secure=True)
+
+        return response
 
     except Exception as e:
         handle_exception(e)
