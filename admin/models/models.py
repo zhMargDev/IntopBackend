@@ -39,3 +39,13 @@ class Rating(Base):
     rater_id = Column(Integer, nullable=False)
     rated_id = Column(Integer, nullable=False)
     rating = Column(Float, nullable=False)
+
+# Определение таблицы 'categories' бесконечной вложенности
+class Category(Base):
+    __tablename__ = 'categories'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    parent_id = Column(Integer, ForeignKey('categories.id'), nullable=True)
+
+    # Опциональная связь с родительской категорией
+    parent = relationship('Category', remote_side=[id], backref='children')
