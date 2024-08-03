@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
 from typing import Optional
-from jose import jwt
+from jose import jwt, JWTError
 from fastapi import HTTPException
+from fastapi.responses import Response
 import os
 import config
-from fastapi.responses import JSONResponse
 
 # Конфигурация для JWT
 SECRET_KEY = os.getenv("SECRET_KEY", config.SECRET_KEY)
@@ -12,55 +12,43 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 часа
 
 # Метод для создания jwt токена
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now() + expires_delta
+        expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
+    # Ensure 'sub' is a string
+    if "sub" in to_encode and not isinstance(to_encode["sub"], str):
+        raise ValueError("'sub' claim must be a string")
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 # Декодирование и возвращение user_id из токена
-def decode_access_token(token: str):
+def decode_access_token(token: str) -> dict:
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     try:
-        # Декодируем токен, чтобы получить полезную нагрузку (payload)
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        
-        # Проверка времени истечения срока действия токена
-        exp = payload.get("exp")
-        if exp is None:
-            raise HTTPException(status_code=401, detail="Токен не содержит времени истечения")
-        
-        exp_datetime = datetime.fromtimestamp(exp)
-        if datetime.now() > exp_datetime:
-            raise HTTPException(status_code=401, detail="Токен истек")
-        
-        user_id = payload.get("sub")  # Извлекаем идентификатор пользователя
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="Токен не содержит идентификатора пользователя")
-        
-        return user_id
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Токен истек")
-    except jwt.JWTError:
-        raise HTTPException(status_code=401, detail="Неверный токен")
+        return payload
+    except JWTError as e:
+        raise HTTPException(status_code=401, detail="Invalid token") from e
 
 # Функция для обновления токена и установки его в куки
-def update_token(response: JSONResponse, user_id: int):
+def update_token(response: Response, user_id: int) -> Response:
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     new_access_token = create_access_token(
-        data={"sub": user_id}, expires_delta=access_token_expires
+        data={"sub": str(user_id)}, expires_delta=access_token_expires
     )
 
     response.set_cookie(
         key="access_token",
         value=new_access_token,
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Время действия куки в секундах
-        httponly=True,  # Устанавливаем флаг, чтобы предотвратить доступ к куке через JavaScript
-        secure=True,    # Устанавливаем флаг, чтобы кука передавалась только по HTTPS
-        samesite="Lax"  # Политика кросс-сайтовых запросов
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=True,
+        samesite="Lax"
     )
     
     return response
+
