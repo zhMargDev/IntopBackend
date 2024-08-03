@@ -1,0 +1,2 @@
+tg_authorization [complited TRUE]
+set-cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsImV4cCI6MTcyMjgxOTIwMX0.K1VRJs_VbvIj_txmCTvkMSjCwKwTJtXNyB0VZdcmrZQ; HttpOnly; Max-Age=86400; Path=/; SameSite=Lax; Secure
