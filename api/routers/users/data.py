@@ -2,12 +2,23 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from database import get_db
 from models.models import User
+from models.schemas import UserBase, UserCreate, UserList, UserOut, UserUpdate
 from utils.token import decode_access_token, update_token
 
 router = APIRouter()
+
+def handle_exception(exception):
+    # Метод вывода ошибки 500
+    raise HTTPException(status_code=500, detail=str(exception))
+
+def update_last_active(user: User, db: Session):
+    # Метод обновления последней активности для пользователя
+    user.last_active = datetime.now()
+    db.commit()
 
 @router.get("/user_data", summary="Получение данных пользователя",
             description="""
@@ -50,58 +61,27 @@ router = APIRouter()
             - При успешном запросе токен доступа будет обновлен, и новый токен будет установлен в куки.
             """)
 async def get_user_data(request: Request, db: Session = Depends(get_db)):
-    # Получаем токен доступа из куков
     access_token = request.cookies.get("access_token")
-    
     if not access_token:
-        # Если токен отсутствует, возвращаем ошибку 401 Unauthorized
         raise HTTPException(status_code=401, detail="Токен доступа не предоставлен")
 
     try:
-        # Декодируем токен для получения идентификатора пользователя
         user_id = decode_access_token(access_token)
-        
         if not user_id:
-            # Если токен недействителен, возвращаем ошибку 401 Unauthorized
             raise HTTPException(status_code=401, detail="Недействительный токен доступа")
 
-        # Находим пользователя по идентификатору
         user = db.query(User).filter(User.id == user_id).first()
-
         if not user:
-            # Если пользователь не найден, возвращаем ошибку 404 Not Found
             raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-        # Обновляем время последней активности пользователя
-        user.last_active = datetime.now()
-        db.commit()
-
-        # Формируем ответ с данными пользователя
-        response = JSONResponse(content={
-            "user_id": user.id,
-            "telegram_id": user.telegram_id,
-            "role_id": user.role_id,
-            "username": user.username,
-            "first_name": user.first_name,
-            "second_name": user.last_name,
-            "phone_number": user.phone_number,
-            "email": user.email,
-            "avatar": user.avatar,
-            "rating": user.rating,
-            "last_active": user.last_active.isoformat()
-        })
-
-        # Обновляем токен и куку
-        response = update_token(response, user.id)
+        update_last_active(user, db)
+        response = UserOut.from_orm(user)
+        response = update_token(request, response)
 
         return response
 
-    except HTTPException as e:
-        # Передаем HTTP исключение дальше
-        raise e
     except Exception as e:
-        # Возвращаем ошибку 401 Unauthorized при возникновении исключения
-        raise HTTPException(status_code=401, detail="Ошибка при декодировании токена или получении данных пользователя")
+        handle_exception(e)
 
 @router.get("/get_users_by", summary="Получение пользователей по параметрам",
             description="""
@@ -151,57 +131,43 @@ async def get_user_data(request: Request, db: Session = Depends(get_db)):
             - **500 Internal Server Error:** Ошибка при получении данных о пользователях.
             """)
 async def get_users_by(
-    id: int = Query(None),
-    telegram_id: int = Query(None),
-    role_id: int = Query(None),
-    username: str = Query(None),
-    first_name: str = Query(None),
-    second_name: str = Query(None),
-    phone_number: str = Query(None),
-    email: str = Query(None),
-    rating: float = Query(None),
-    db: Session = Depends(get_db)
-):
-    try:
-        query = db.query(User)
+        id: Optional[int] = Query(None),
+        telegram_id: Optional[int] = Query(None),
+        role_id: Optional[int] = Query(None),
+        username: Optional[str] = Query(None),
+        first_name: Optional[str] = Query(None),
+        second_name: Optional[str] = Query(None),
+        phone_number: Optional[str] = Query(None),
+        email: Optional[str] = Query(None),
+        rating: Optional[float] = Query(None),
+        db: Session = Depends(get_db)
+    ):
+        try:
+            filters = {
+                User.id: id,
+                User.telegram_id: telegram_id,
+                User.role_id: role_id,
+                User.username: username,
+                User.first_name: first_name,
+                User.second_name: second_name,
+                User.phone_number: phone_number,
+                User.email: email,
+                User.rating: rating
+            }
 
-        filters = {
-            User.id: id,
-            User.telegram_id: telegram_id,
-            User.role_id: role_id,
-            User.username: username,
-            User.first_name: first_name,
-            User.second_name: second_name,
-            User.phone_number: phone_number,
-            User.email: email,
-            User.rating: rating
-        }
+            query = db.query(User)
+            for attr, value in filters.items():
+                if value is not None:
+                    query = query.filter(attr == value)
 
-        for attr, value in filters.items():
-            if value is not None:
-                query = query.filter(attr == value)
+            users = query.all()
+            if not users:
+                raise HTTPException(status_code=403, detail="Пользователей не найдено")
 
-        users = query.all()
+            return UserList(users=[UserOut.from_orm(user) for user in users])
 
-        if not users:
-            raise HTTPException(status_code=403, detail="Пользователей не найден.")
-
-        return JSONResponse(content=[{
-            "user_id": user.id,
-            "telegram_id": user.telegram_id,
-            "role_id": user.role_id,
-            "username": user.username,
-            "first_name": user.first_name,
-            "second_name": user.second_name,
-            "phone_number": user.phone_number,
-            "email": user.email,
-            "avatar": user.avatar,
-            "rating": user.rating,
-            "last_active": user.last_active.isoformat()
-        } for user in users])
-
-    except Exception:
-        raise HTTPException(status_code=500, detail="Ошибка при получении данных о пользователях")
+        except Exception as e:
+            handle_exception(e)
 
 @router.put("/update_user", summary="Обновление данных пользователя",
             description="""
@@ -223,45 +189,30 @@ async def get_users_by(
             - **400 Bad Request:** Неверные данные для обновления.
             """)
 async def update_user(request: Request, db: Session = Depends(get_db)):
-    # Получаем токен доступа из куков
     access_token = request.cookies.get("access_token")
-    user_data = await request.json()
-
     if not access_token:
-        # Если токен отсутствует, возвращаем ошибку 401 Unauthorized
         raise HTTPException(status_code=401, detail="Токен доступа не предоставлен")
 
     try:
-        # Декодируем токен для получения идентификатора пользователя
         user_id = decode_access_token(access_token)
-        
         if not user_id:
-            # Если токен недействителен, возвращаем ошибку 401 Unauthorized
             raise HTTPException(status_code=401, detail="Недействительный токен доступа")
 
-        # Находим пользователя по идентификатору
         user = db.query(User).filter(User.id == user_id).first()
-
         if not user:
-            # Если пользователь не найден, возвращаем ошибку 404 Not Found
             raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-        # Обновляем данные пользователя
-        for key, value in user_data.items():
+        user_data = await request.json()
+        update_data = UserUpdate(**user_data)
+        for key, value in update_data.dict(exclude_unset=True).items():
             setattr(user, key, value)
-        
-        # Обновляем время последней активности пользователя
-        user.last_active = datetime.now()
-        db.commit()
+
+        update_last_active(user, db)
 
         return JSONResponse(content={"message": "Данные пользователя обновлены"})
 
-    except HTTPException as e:
-        # Передаем HTTP исключение дальше
-        raise e
     except Exception as e:
-        # Возвращаем ошибку 400 Bad Request при возникновении исключения
-        raise HTTPException(status_code=400, detail="Ошибка при обновлении данных пользователя")
+        handle_exception(e)
 
 @router.get("/all_users", summary="Получение всех пользователей",
             description="""
@@ -301,24 +252,11 @@ async def update_user(request: Request, db: Session = Depends(get_db)):
             """)
 async def get_all_users(db: Session = Depends(get_db)):
     try:
-        # Получаем всех пользователей из базы данных
         users = db.query(User).all()
-        return JSONResponse(content=[{
-            "user_id": user.id,
-            "telegram_id": user.telegram_id,
-            "role_id": user.role_id,
-            "username": user.username,
-            "first_name": user.first_name,
-            "second_name": user.last_name,
-            "phone_number": user.phone_number,
-            "email": user.email,
-            "avatar": user.avatar,
-            "rating": user.rating,
-            "last_active": user.last_active.isoformat()
-        } for user in users])
+        return UserList(users=[UserOut.from_orm(user) for user in users])
+
     except Exception as e:
-        # Возвращаем ошибку 500 Internal Server Error при возникновении исключения
-        raise HTTPException(status_code=500, detail="Ошибка при получении данных о пользователях")
+        handle_exception(e)
 
 @router.delete("/delete_user/{user_id}", summary="Удаление пользователя",
                description="""
@@ -339,37 +277,23 @@ async def get_all_users(db: Session = Depends(get_db)):
                - **404 Not Found:** Пользователь с указанным идентификатором не найден.
                """)
 async def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)):
-    # Получаем токен доступа из куков
     access_token = request.cookies.get("access_token")
-
     if not access_token:
-        # Если токен отсутствует, возвращаем ошибку 401 Unauthorized
         raise HTTPException(status_code=401, detail="Токен доступа не предоставлен")
 
     try:
-        # Декодируем токен для получения идентификатора пользователя
         admin_id = decode_access_token(access_token)
-        
         if not admin_id:
-            # Если токен недействителен, возвращаем ошибку 401 Unauthorized
             raise HTTPException(status_code=401, detail="Недействительный токен доступа")
 
-        # Находим пользователя по идентификатору
         user = db.query(User).filter(User.id == user_id).first()
-
         if not user:
-            # Если пользователь не найден, возвращаем ошибку 404 Not Found
             raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-        # Удаляем пользователя
         db.delete(user)
         db.commit()
 
         return JSONResponse(content={"message": "Пользователь удален"})
 
-    except HTTPException as e:
-        # Передаем HTTP исключение дальше
-        raise e
     except Exception as e:
-        # Возвращаем ошибку 500 Internal Server Error при возникновении исключения
-        raise HTTPException(status_code=500, detail="Ошибка при удалении пользователя")
+        handle_exception(e)

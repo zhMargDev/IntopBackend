@@ -5,7 +5,7 @@ from typing import List
 
 from database import get_db
 from models.models import Category
-from models.pydantic_models import CategoryOut
+from models.schemas import CategoryOut
 
 router = APIRouter()
 

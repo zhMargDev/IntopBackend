@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.models import User
-from models.pydantic_models import TelegramInitData
+from models.schemas import TelegramInitData
 from utils.token import update_token
 
 router = APIRouter()
