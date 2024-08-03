@@ -33,6 +33,7 @@ router = APIRouter()
               "phone_number": "+1234567890",  # Номер телефона пользователя
               "email": "ivan@example.com",   # Электронная почта пользователя
               "avatar": "path/to/avatar.jpg",  # Путь к аватарке пользователя
+              "rating": 1-5, # Рейтинга пользователя
               "last_active": "2024-08-02T12:34:56"  # Время последней активности пользователя
             }
             ```
@@ -87,6 +88,7 @@ async def get_user_data(request: Request, db: Session = Depends(get_db)):
             "phone_number": user.phone_number,
             "email": user.email,
             "avatar": user.avatar,
+            "rating": user.rating,
             "last_active": user.last_active.isoformat()
         })
 
@@ -135,6 +137,7 @@ async def get_user_data(request: Request, db: Session = Depends(get_db)):
                   "phone_number": "+1234567890",  # Номер телефона пользователя
                   "email": "ivan@example.com",   # Электронная почта пользователя
                   "avatar": "path/to/avatar.jpg",  # Путь к аватарке пользователя
+                  "rating": 1-5, # Рейтинга пользователя
                   "last_active": "2024-08-02T12:34:56"  # Время последней активности пользователя
                 },
                 {...},
@@ -157,6 +160,7 @@ async def get_users_by(
     second_name: str = Query(None),
     phone_number: str = Query(None),
     email: str = Query(None),
+    rating: float = Query(None),
     db: Session = Depends(get_db)
 ):
     try:
@@ -171,6 +175,7 @@ async def get_users_by(
             User.second_name: second_name,
             User.phone_number: phone_number,
             User.email: email,
+            User.rating: rating
         }
 
         for attr, value in filters.items():
@@ -192,6 +197,7 @@ async def get_users_by(
             "phone_number": user.phone_number,
             "email": user.email,
             "avatar": user.avatar,
+            "rating": user.rating,
             "last_active": user.last_active.isoformat()
         } for user in users])
 
@@ -282,6 +288,7 @@ async def update_user(request: Request, db: Session = Depends(get_db)):
                 "phone_number": "+1234567890",
                 "email": "ivan@example.com",
                 "avatar": "path/to/avatar.jpg",
+                "rating": 1-5, # Рейтинга пользователя
                 "last_active": "2024-08-02T12:34:56"
               },
               ...
@@ -307,6 +314,7 @@ async def get_all_users(db: Session = Depends(get_db)):
             "phone_number": user.phone_number,
             "email": user.email,
             "avatar": user.avatar,
+            "rating": user.rating,
             "last_active": user.last_active.isoformat()
         } for user in users])
     except Exception as e:

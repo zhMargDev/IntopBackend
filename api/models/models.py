@@ -1,63 +1,41 @@
-from sqlalchemy import Column, Integer, String, Boolean, MetaData, ForeignKey, Table, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, MetaData
 from sqlalchemy.orm import declarative_base, relationship
-from datetime import datetime
-
-# Создание экземпляра MetaData
-metadata = MetaData()
 
 # Создание базового класса с использованием декларативной базы
 Base = declarative_base()
 
 # Определение таблицы 'roles'
-roles_table = Table(
-    'roles',
-    metadata,
-    Column('id', Integer, primary_key=True, autoincrement=True),  # Первичный ключ, автоинкремент
-    Column('name', String(255), nullable=False),  # Имя роли, не может быть пустым
-    Column('permission', String(255), nullable=False)  # Разрешение, не может быть пустым
-)
-
-# Определение таблицы 'users'
-users_table = Table(
-    'users',
-    metadata,
-    Column('id', Integer, primary_key=True, autoincrement=True),  # Первичный ключ, автоинкремент
-    Column('telegram_id', Integer, unique=True),  # Идентификатор пользователя в Telegram
-    Column('role_id', Integer, ForeignKey('roles.id')),  # Внешний ключ к таблице 'roles'
-    Column('username', String(255), nullable=True),  # Имя пользователя
-    Column('first_name', String(255), nullable=True),  # Имя
-    Column('second_name', String(255), nullable=True),  # Фамилия
-    Column('phone_number', String(255), nullable=True),  # Номер телефона
-    Column('email', String(255), nullable=True),  # Электронная почта
-    Column('avatar', String(255), nullable=True), # Аватарка пользователя
-    Column('last_active', DateTime) # Поле для хранения времени последней активности
-)
-
-# Определение класса Role, связанного с таблицей 'roles'
 class Role(Base):
-    __table__ = roles_table
-
-    id = roles_table.c.id
-    name = roles_table.c.name
-    permission = roles_table.c.permission
+    __tablename__ = 'roles'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    permission = Column(String(255), nullable=False)
 
     # Опциональная связь с User
     users = relationship('User', backref='role')
 
-# Определение класса User, связанного с таблицей 'users'
+# Определение таблицы 'users'
 class User(Base):
-    __table__ = users_table
-
-    id = users_table.c.id
-    telegram_id = users_table.c.telegram_id
-    role_id = users_table.c.role_id
-    username = users_table.c.username
-    first_name = users_table.c.first_name
-    second_name = users_table.c.second_name
-    phone_number = users_table.c.phone_number
-    email = users_table.c.email
-    avatar = users_table.c.avatar
-    last_active = users_table.c.last_active
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    telegram_id = Column(Integer, unique=True)
+    role_id = Column(Integer, ForeignKey('roles.id'))
+    username = Column(String(255), nullable=True)
+    first_name = Column(String(255), nullable=True)
+    second_name = Column(String(255), nullable=True)
+    phone_number = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=True)
+    avatar = Column(String(255), nullable=True)
+    rating = Column(Float, nullable=True)
+    last_active = Column(DateTime)
 
     # Связь с другими таблицами
-    role = relationship(Role)  # Связь с объектом Role
+    role = relationship('Role', back_populates='users')
+
+# Определение таблицы 'ratings'
+class Rating(Base):
+    __tablename__ = 'ratings'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    rater_id = Column(Integer, nullable=False)
+    rated_id = Column(Integer, nullable=False)
+    rating = Column(Float, nullable=False)

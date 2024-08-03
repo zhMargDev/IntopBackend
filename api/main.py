@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers.users.auth import router as auth_router
 from routers.users.data import router as data_router
+from routers.users.rating import router as rating_router
 
 app = FastAPI()
 
@@ -25,6 +26,12 @@ app.add_middleware(
 def read_item():
     return {"data": "Hello"}
 
-# Роутеры
+"""
+    Роутеры пользователей:
+"""
+# Авторизация
 app.include_router(auth_router, prefix="/users", tags=["users"])
+# Получение или изменения данных пользователей
 app.include_router(data_router, prefix="/users", tags=["users"])
+# Оценка пользователей
+app.include_router(rating_router, prefix="/users", tags=["users_rating"])
