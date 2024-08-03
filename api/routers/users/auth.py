@@ -29,19 +29,15 @@ router = APIRouter()
              }
              ```
 
-             Curl запрос
+             Curl
 
              ```
-             curl -X POST "http://<your_domain>/tg_authorization" \
-             -H "Content-Type: application/json" \
-             -d '{
-                   "id": 123456789,
-                   "first_name": "Иван",
-                   "last_name": "Иванов",
-                   "username": "ivan_ivanov"
-                 }'
-
-            ```
+             curl -v -X POST "http://localhost:8000/users/tg_authorization" -H "Content-Type: application/json" -d '{                                                                                                                    "id": 123456789,
+              "first_name": "Иван",
+              "last_name": "Иванов",
+              "username": "ivan_ivanov"
+            }'
+             ```
 
              **Ответ:**
 

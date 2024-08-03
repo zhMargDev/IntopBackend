@@ -18,3 +18,5 @@ python-jose
 
 # Starlette (dependency for FastAPI)
 starlette
+
+python-multipart
