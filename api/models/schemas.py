@@ -28,12 +28,6 @@ class UserBase(BaseModel):
     email: Optional[str] = None
     rating: Optional[float] = None
 
-class UserCreate(UserBase):
-    pass
-
-class UserUpdate(UserBase):
-    pass
-
 class UserOut(UserBase):
     user_id: int
     avatar: Optional[str] = None

@@ -6,7 +6,7 @@ from typing import Optional
 
 from database import get_db
 from models.models import User
-from models.schemas import UserBase, UserCreate, UserList, UserOut, UserUpdate
+from models.schemas import UserList, UserOut, UserUpdate
 from utils.token import decode_access_token, update_token
 
 router = APIRouter()
