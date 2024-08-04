@@ -1,10 +1,11 @@
 # FastAPI and ASGI server
 fastapi
 uvicorn[standard]
-fastapi_admin
-
+Flask-Admin
+Flask-SQLAlchemy
+flask
 # SQLAlchemy and database drivers
 sqlalchemy
 alembic
 psycopg2-binary
-
+hypercorn
