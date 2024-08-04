@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from datetime import datetime
 
@@ -17,3 +17,8 @@ class CategoryOut(BaseModel):
 
     class Config:
         orm_mode = True
+
+class RatingCreate(BaseModel):
+    rater_id: int
+    rated_id: int
+    rating: float = Field(..., gt=0, lt=6)  # Предполагаем, что рейтинг от 1 до 5

@@ -1,87 +1,115 @@
-from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy import func
-from typing import Dict
+from fastapi import APIRouter, HTTPException, Depends, Request
+from starlette.responses import JSONResponse
+from sqlalchemy.orm import Session
 
 from database import get_db
 from models.models import User, Rating
+from models.schemas import RatingCreate
+from utils.token import decode_access_token, update_token
 
 router = APIRouter()
 
-@router.post("/rate", summary="Оценить пользователя",
+
+
+def update_average_rating(user_id: int, db: Session):
+    # Получение всех рейтингов для указанного пользователя
+    ratings = db.query(Rating).filter(Rating.rated_id == user_id).all()
+
+    if not ratings:
+        average_rating = None  # Или любое значение по умолчанию
+    else:
+        # Вычисление средней оценки
+        average_rating = sum(rating.rating for rating in ratings) / len(ratings)
+
+    # Обновление средней оценки пользователя
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if user:
+        user.rating = average_rating
+        db.commit()
+
+@router.post("/rate", summary="Оценка или изменение оценки пользователя",
              description="""
-             Этот эндпоинт позволяет пользователю оценивать другого пользователя в системе.
-
-             **Запрос:**
-
-             Отправьте POST-запрос на этот эндпоинт с параметрами:
+             Позволяет пользователю оценить другого пользователя или изменить ранее оставленную оценку.
              
-             - `rater_id` (int): ID пользователя, который оставляет оценку.
-             - `rated_id` (int): ID пользователя, который получает оценку.
-             - `rating` (float): Оценка, выставляемая пользователем. Должна быть в диапазоне от 1 до 5.
+             **Необходимо отправить:**
+             - `rater_id`: ID пользователя, который оставляет оценку.
+             - `rated_id`: ID пользователя, которого оценивают.
+             - `rating`: Оценка, которую ставит пользователь (например, от 1 до 5).
 
-             Пример тела запроса:
-             
-             ```json
-             {
-               "rater_id": 123,
-               "rated_id": 456,
-               "rating": 4.5
-             }
+             **Пример Curl:**
+             ```
+             curl -v -X POST "http://localhost:8000/users/rate" \
+               -H "Content-Type: application/json" \
+               -b "access_token=your_access_token" \
+               -d '{"rater_id": 1, "rated_id": 1, "rating": 5}'
              ```
 
              **Ответ:**
+             - `message`: Сообщение о результате операции ("Оценка пользователя обновлена" или "Пользователь оценен").
 
-             В случае успешного выполнения запроса вы получите JSON-ответ с сообщением об успешном добавлении оценки и обновлении рейтинга пользователя:
-
-             ```json
-             {
-               "message": "Rating added and user rating updated successfully"
-             }
-             ```
-
-             Если оценка находится вне допустимого диапазона (менее 1 или более 5), вы получите ошибку 400 с описанием проблемы. Если один из пользователей не найден, вы получите ошибку 404.
-
-             **Статусные коды:**
-
-             - **200 OK:** Оценка успешно добавлена и рейтинг пользователя обновлен.
-             - **400 Bad Request:** Оценка вне допустимого диапазона (1-5).
-             - **404 Not Found:** Один или оба пользователя не найдены.
+             **Ошибки:**
+             - `401 Unauthorized`: Токен доступа отсутствует или недействителен.
+             - `403 Forbidden`: Неправильный оценивающий пользователь, неправильный оценивающийся пользователь, или попытка оценить самого себя.
              """)
-async def rate_user(rater_id: int, rated_id: int, rating: float, db: AsyncSession = Depends(get_db)) -> Dict[str, str]:
-    # Проверка валидности рейтинга
-    if rating < 1 or rating > 5:
-        raise HTTPException(status_code=400, detail="Оценка должна быть от 1 до 5")
+async def rate_user(
+        request: Request,
+        rating_data: RatingCreate,
+        db: Session = Depends(get_db)
+    ):
+    # Извлечение токена из куки
+    token = request.cookies.get("access_token")
 
-    # Проверка существования пользователя, который оставляет оценку
-    rater = await db.execute(select(User).filter(User.id == rater_id))
-    rater = rater.scalar_one_or_none()
-    if rater is None:
-        raise HTTPException(status_code=404, detail="Пользователь, оставляющий оценку, не найден.")
+    if not token:
+        raise HTTPException(status_code=401, detail="Токен доступа отсутствует")
 
-    # Проверка существования пользователя, которого оценивают
-    rated = await db.execute(select(User).filter(User.id == rated_id))
-    rated = rated.scalar_one_or_none()
-    if rated is None:
-        raise HTTPException(status_code=404, detail="Пользователь, который получает оценку, не найден.")
+    # Получение user_id из токена
+    try:
+        payload = decode_access_token(token)
+        token_user_id = int(payload['sub'])
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Недействительный токен")
 
-    # Добавление рейтинга
-    new_rating = Rating(rater_id=rater_id, rated_id=rated_id, rating=rating)
-    async with db.begin():
-        db.add(new_rating)
+    # Проверка существования rater и rated пользователей
+    rater = db.query(User).filter(User.id == rating_data.rater_id).first()
+    rated = db.query(User).filter(User.id == rating_data.rated_id).first()
 
-    # Расчет средней оценки для оцененного пользователя
-    avg_rating = await db.execute(select(func.avg(Rating.rating)).filter(Rating.rated_id == rated_id))
-    avg_rating = avg_rating.scalar_one_or_none()
-    
-    # Обновление средней оценки пользователя в таблице 'users'
-    if avg_rating is not None:  # Проверка на случай, если нет рейтингов
-        async with db.begin():
-            await db.execute(
-                select(User).filter(User.id == rated_id).update({User.rating: avg_rating})
-            )
+    if not rater or rater.id != token_user_id:
+        raise HTTPException(status_code=403, detail="Неправильный оценивающий пользователь")
+
+    if not rated:
+        raise HTTPException(status_code=403, detail="Неправильный оценивающийся пользователь")
+
+    if rater.id == rated.id:
+        raise HTTPException(status_code=403, detail="Вы не можете оценить самого себя")
+
+
+    # Проверка на существование рейтинга от данного rater для данного rated
+    existing_rating = db.query(Rating).filter(
+        Rating.rater_id == rating_data.rater_id,
+        Rating.rated_id == rating_data.rated_id
+    ).first()
+
+    if existing_rating:
+        # Обновление существующего рейтинга
+        existing_rating.rating = rating_data.rating
+        db.commit()
+        message = "Оценка пользователя обнавлена"
     else:
-        raise HTTPException(status_code=404, detail="Пользователь не найден.")
+        # Создание нового рейтинга
+        new_rating = Rating(
+            rater_id=rating_data.rater_id,
+            rated_id=rating_data.rated_id,
+            rating=rating_data.rating
+        )
+        db.add(new_rating)
+        db.commit()
+        message = "Пользователь оценён"
 
-    return {"message": "Пользователь успешно оценён."}
+    # Обновление средней оценки пользователя
+    update_average_rating(rating_data.rated_id, db)
+
+    # Обновляем токен и устанавливаем его в куки
+    response = JSONResponse(content={"message": message})
+    response = update_token(response, rater.id)
+    return response
