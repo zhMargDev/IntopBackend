@@ -30,10 +30,10 @@ users_table = Table(
     Column('email', String(255), nullable=True),
     Column('avatar', String(255), nullable=True),
     Column('rating', Float, nullable=True),
-    Column('last_active', DateTime),
     Column('region_id', Integer, ForeignKey('regions.id'), nullable=True),
     Column('is_verified', Boolean, default=False),
-    Column('is_active', Boolean, default=True)
+    Column('is_active', Boolean, default=True),
+    Column('last_active', DateTime),
 )
 
 # Определение таблицы 'ratings'

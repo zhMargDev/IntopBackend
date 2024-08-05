@@ -6,6 +6,7 @@ from starlette.responses import JSONResponse
 
 from database import get_db
 from models.models import User
+from models.schemas import UserGetByFilters
 from utils.token import decode_access_token, update_token
 from config import BASE_DIR
 
@@ -149,6 +150,9 @@ async def deactivate_account(
         user_id: int = Query(None),
         db: Session = Depends(get_db)
     ):
+
+    # !!!!!!!!!!! Добавить деактивацию всего что связано с пользователем, например его магазин, его товары, товары магазина и тд
+
     # Извлечение токена из куки
     token = request.cookies.get("access_token")
 
@@ -181,3 +185,60 @@ async def deactivate_account(
     response.set_cookie(key="access_token", value="", expires=0)
 
     return response
+
+@router.get('/by_filters', summary="Получение пользователей по фильтрам", 
+    description="""
+        Этот эндпоинт возвращает пользователей по указанным фильтрам.
+        Если фильтры не указаны, то вернутся все активные пользователи.
+
+        **Пример запроса**
+
+        ```
+        curl -X GET "http://localhost:8000/users/by_filters?id=1&username=johndoe"
+        ```
+
+        **Ответ:**
+        Если не было ошибки вернётся массив со всеми пользователями, соответствующими фильтрам, которые не удалили (деактивировали) свой аккаунт.
+        
+        **Ошибки:**
+        - `200`: Всё прошло успешно, данные получены.
+        - `403`: Пользователей не найдено
+        - `500`: Произошла ошибка на сервере.
+    """)
+async def get_users_by_filters(
+    filters: UserGetByFilters = Depends(),
+    db: Session = Depends(get_db)
+):
+    # Создаем начальный запрос для получения активных пользователей
+    query = db.query(User).filter(User.is_active == True)
+    
+    # Применяем фильтры, если они указаны
+    if filters.id is not None:
+        query = query.filter(User.id == filters.id)
+    if filters.telegram_id is not None:
+        query = query.filter(User.telegram_id == filters.telegram_id)
+    if filters.role_id is not None:
+        query = query.filter(User.role_id == filters.role_id)
+    if filters.username:
+        query = query.filter(User.username.ilike(f"%{filters.username}%"))
+    if filters.first_name:
+        query = query.filter(User.first_name.ilike(f"%{filters.first_name}%"))
+    if filters.second_name:
+        query = query.filter(User.second_name.ilike(f"%{filters.second_name}%"))
+    if filters.phone_number:
+        query = query.filter(User.phone_number.ilike(f"%{filters.phone_number}%"))
+    if filters.email:
+        query = query.filter(User.email.ilike(f"%{filters.email}%"))
+    if filters.region_id is not None:
+        query = query.filter(User.region_id == filters.region_id)
+    if filters.is_verified is not None:
+        query = query.filter(User.is_verified == filters.is_verified)
+
+    # Выполняем запрос и получаем результаты
+    users = query.all()
+
+    # Проверяем, есть ли результаты, если нет - возвращаем ошибку 403
+    if not users:
+        raise HTTPException(status_code=403, detail="Пользователий не найдено")
+
+    return users
