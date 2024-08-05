@@ -1,8 +1,10 @@
 import shutil
 import os
+
 from fastapi import APIRouter, Depends, HTTPException, Request, File, UploadFile, Form, Query
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
+from datetime import datetime
 
 from database import get_db
 from models.models import User
@@ -114,6 +116,8 @@ async def update_user(
         # Обновляем путь к аватарке в базе данных
         user.avatar = f"/static/users_avatars/{avatar_filename}"
 
+    user.last_active = datetime.now()
+
     db.commit()
     db.refresh(user)
 
@@ -128,7 +132,7 @@ async def update_user(
                Этот эндпоинт деактивирует аккаунт пользователя.
 
                **Параметры запроса:**
-               - `user_id`: Идентификатор пользователя (необязательный параметр). Если не указан, используется `user_id` из токена доступа.
+               - `user_id`: Идентификатор пользователя (необязательный параметр). Если не указан, то пользователь поддельный.
 
                **Пример запроса**
                curl -v -X DELETE "http://localhost:8000/users/deactivate" \
@@ -242,3 +246,4 @@ async def get_users_by_filters(
         raise HTTPException(status_code=403, detail="Пользователий не найдено")
 
     return users
+

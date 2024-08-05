@@ -1,12 +1,12 @@
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models.models import User, Role
-from models.schemas import TelegramInitData
-from utils.token import update_token
+from models.schemas import TelegramInitData, UserResponse
+from utils.token import decode_access_token, update_token
 
 router = APIRouter()
 
@@ -32,7 +32,8 @@ router = APIRouter()
              Curl
 
              ```
-             curl -v -X POST "http://localhost:8000/users/tg_authorization" -H "Content-Type: application/json" -d '{                                                                                                                    "id": 123456789,
+             curl -v -X POST "http://localhost:8000/users/tg_authorization" -H "Content-Type: application/json" -d '{                                                                                                                    
+              "id": 123456789,
               "first_name": "Иван",
               "last_name": "Иванов",
               "username": "ivan_ivanov"
@@ -91,8 +92,66 @@ async def tg_authorization(init_data: TelegramInitData, db: Session = Depends(ge
         db.commit()
         db.refresh(user)
 
+    # Переоброзование времени последней активности в строку для передачи через json
+    user.last_active = user.last_active.isoformat()
+    # Создаем ответ с использованием UserResponse
+    user_response = UserResponse.from_orm(user)
+
     # Обновляем токен и устанавливаем его в куки
-    response = JSONResponse(content={"message": "Авторизация прошла успешно, токен доступа установлен в куке."})
+    response = JSONResponse(content=user_response.dict())
+    response = update_token(response, user.id)
+    
+    return response
+
+@router.post('/my_data', summary="Получени данных пользователя",
+    description="""
+        Этот эндпоинт возвращает все данные пользователя исходя из id указанный в куки
+
+        **Пример запроса**
+        curl -v -X POST "http://localhost:8000/users/my_data" \
+           -H "Content-Type: application/json" \
+           -b "access_token=your_access_token"
+        
+        **Ответ:**
+        Если не было ошибки вернутся данные пользователя.
+        
+        **Ошибки:**
+        - `200`: Всё прошло успешно, данные получены.
+        - `403`: Пользователь не найдено, удалён или токен не действителен.
+        - `500`: Произошла ошибка на сервере.
+    """)
+async def get_my_data(request: Request, db: Session = Depends(get_db)):
+    # Извлечение токена из куки
+    token = request.cookies.get("access_token")
+
+    if not token:
+        raise HTTPException(status_code=403, detail="Токен доступа отсутствует")
+
+    # Получение user_id из токена
+    try:
+        payload = decode_access_token(token)
+        token_user_id = int(payload['sub'])
+    except HTTPException:
+        raise HTTPException(status_code=403, detail="Недействительный токен")
+    
+    user = db.query(User).first()
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Пользователя не существует")
+
+    # Устанавливаем время последней активности пользователя
+    user.last_active = datetime.now()
+
+    db.commit()
+    db.refresh(user)
+
+    # Переоброзование времени последней активности в строку для передачи через json ! не сохраняем в базе
+    user.last_active = user.last_active.isoformat()
+    # Создаем ответ с использованием UserResponse
+    user_response = UserResponse.from_orm(user)
+
+    # Обновляем токен и устанавливаем его в куки
+    response = JSONResponse(content=user_response.dict())
     response = update_token(response, user.id)
     
     return response

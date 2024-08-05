@@ -34,3 +34,24 @@ class UserGetByFilters(BaseModel):
     email: Optional[str] = None
     region_id: Optional[int] = None
     is_verified: Optional[int] = None
+
+
+class UserResponse(BaseModel):
+    id: int
+    telegram_id: int
+    role_id: Optional[int] = None
+    username: Optional[str] = None
+    first_name: Optional[str] = None
+    second_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    email: Optional[str] = None
+    avatar: Optional[str] = None
+    rating: Optional[float] = None
+    region_id: Optional[int] = None
+    is_verified: Optional[bool] = None
+    is_active: bool
+    last_active: str
+
+    class Config:
+        orm_mode = True
+        from_attributes=True
