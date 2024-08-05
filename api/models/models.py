@@ -125,10 +125,10 @@ class User(Base):
     email = users_table.c.email
     avatar = users_table.c.avatar
     rating = users_table.c.rating
-    last_active = users_table.c.last_active
     region_id = users_table.c.region_id
     is_verified = users_table.c.is_verified
     is_active = users_table.c.is_active
+    last_active = users_table.c.last_active
 
     # Связь с другими таблицами
     role = relationship('Role', back_populates='users')
