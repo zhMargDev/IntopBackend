@@ -129,6 +129,7 @@ class StorePrivilege(Base):
 
     id = store_privileges_table.c.id
     name = store_privileges_table.c.name
+    access_level = store_privileges_table.c.access_level
 
     # Связь с StoreManager
     managers = relationship('StoreManager', back_populates='privilege')

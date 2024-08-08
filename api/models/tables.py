@@ -111,5 +111,6 @@ store_privileges_table = Table(
     'store_privileges',
     metadata,
     Column('id', Integer, primary_key=True, autoincrement=True),
-    Column('name', String(255), nullable=False)
+    Column('name', String(255), nullable=False),
+    Column('access_level', Integer, nullable=False)
 )
