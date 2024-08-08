@@ -95,3 +95,21 @@ regions_table = Table(
     Column('name', String(255), nullable=False),
     Column('parent_id', Integer, ForeignKey('regions.id'), nullable=True)
 )
+
+# Определение таблицы 'store_managers'
+store_managers_table = Table(
+    'store_managers',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('store_id', Integer, ForeignKey('stores.id'), nullable=False),
+    Column('user_id', Integer, ForeignKey('users.id'), nullable=False),
+    Column('privileges_id', Integer, ForeignKey('store_privileges.id'), nullable=False)
+)
+
+# Определение таблицы 'store_privileges'
+store_privileges_table = Table(
+    'store_privileges',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('name', String(255), nullable=False)
+)

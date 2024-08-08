@@ -1,6 +1,11 @@
 from sqlalchemy.orm import declarative_base, relationship
-from models.tables import (roles_table, users_table, ratings_table, categories_table, 
-                     stores_table, store_emails_table, store_phone_numbers_table, regions_table)
+
+# Импорт таблиц из models.tables
+from models.tables import (
+    roles_table, users_table, ratings_table, categories_table,
+    stores_table, store_emails_table, store_phone_numbers_table, regions_table,
+    store_privileges_table, store_managers_table
+)
 
 # Создание базового класса с использованием декларативной базы
 Base = declarative_base()
@@ -38,6 +43,7 @@ class User(Base):
     # Связь с другими таблицами
     role = relationship('Role', back_populates='users')
     region = relationship('Region', backref='users')
+    managed_stores = relationship('StoreManager', back_populates='user')
 
 # Определение класса Rating, связанного с таблицей 'ratings'
 class Rating(Base):
@@ -78,6 +84,9 @@ class Store(Base):
     owner = relationship('User', backref='stores')
     category = relationship('Category', backref='stores')
     region = relationship('Region', backref='stores')
+    emails = relationship('StoreEmail', backref='store')
+    phone_numbers = relationship('StorePhoneNumber', backref='store')
+    managers = relationship('StoreManager', back_populates='store')
 
 # Определение класса StoreEmail, связанного с таблицей 'store_emails'
 class StoreEmail(Base):
@@ -113,3 +122,27 @@ class Region(Base):
 
     # Связь с дочерними регионами
     parent = relationship('Region', remote_side=[regions_table.c.id], backref='children')
+
+# Определение класса StorePrivilege, связанного с таблицей 'store_privileges'
+class StorePrivilege(Base):
+    __table__ = store_privileges_table
+
+    id = store_privileges_table.c.id
+    name = store_privileges_table.c.name
+
+    # Связь с StoreManager
+    managers = relationship('StoreManager', back_populates='privilege')
+
+# Определение класса StoreManager, связанного с таблицей 'store_managers'
+class StoreManager(Base):
+    __table__ = store_managers_table
+
+    id = store_managers_table.c.id
+    store_id = store_managers_table.c.store_id
+    user_id = store_managers_table.c.user_id
+    privileges_id = store_managers_table.c.privileges_id
+
+    # Связь с Store
+    store = relationship('Store', back_populates='managers')
+    user = relationship('User', back_populates='managed_stores')
+    privilege = relationship('StorePrivilege', back_populates='managers')
