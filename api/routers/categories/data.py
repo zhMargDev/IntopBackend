@@ -5,7 +5,7 @@ from typing import List
 
 from database import get_db
 from models.models import Category
-from models.schemas import CategoryOut
+from schemas.category import CategoryOut
 
 router = APIRouter()
 

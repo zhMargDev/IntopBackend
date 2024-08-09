@@ -7,7 +7,7 @@ from datetime import datetime
 
 from database import get_db
 from models.models import User
-from models.schemas import UserGetByFilters
+from schemas.user import UserGetByFilters
 from utils.token import decode_access_token, update_token
 from config import BASE_DIR
 

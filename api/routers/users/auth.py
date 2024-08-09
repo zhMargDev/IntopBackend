@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.models import User, Role
-from models.schemas import TelegramInitData, UserResponse
+from schemas.user import TelegramInitData, UserResponse
 from utils.token import decode_access_token, update_token
 
 router = APIRouter()
@@ -86,6 +86,7 @@ async def tg_authorization(init_data: TelegramInitData, db: Session = Depends(ge
             second_name=init_data.last_name,
             username=init_data.username,
             last_active=datetime.now(),  # Обновляем время последнего действия
+            created_at=datetime.now(),  # Добавляет дату создания аккаунта
             is_active=True  # Устанавливаем is_active в True для нового пользователя
         )
         db.add(user)
@@ -110,7 +111,7 @@ async def tg_authorization(init_data: TelegramInitData, db: Session = Depends(ge
         **Пример запроса**
         curl -v -X POST "http://localhost:8000/users/my_data" \
            -H "Content-Type: application/json" \
-           -b "access_token=your_access_token"
+           -b "access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzIzMzIyODMzfQ.1bwnUmgPwoo9AkT4eBU2P7aFAVPvnnfx_rCxtoyaceQ"
         
         **Ответ:**
         Если не было ошибки вернутся данные пользователя.
@@ -145,8 +146,10 @@ async def get_my_data(request: Request, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    # Переоброзование времени последней активности в строку для передачи через json ! не сохраняем в базе
+    # Переоброзование времени последней активности и даты создания в строку для передачи через json ! не сохраняем в базе
     user.last_active = user.last_active.isoformat()
+    user.created_at = user.created_at.isoformat()
+
     # Создаем ответ с использованием UserResponse
     user_response = UserResponse.from_orm(user)
 

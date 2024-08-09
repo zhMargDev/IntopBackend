@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.models import User, Rating
-from models.schemas import RatingCreate
+from schemas.user import RatingCreate
 from utils.token import decode_access_token, update_token
 
 router = APIRouter()

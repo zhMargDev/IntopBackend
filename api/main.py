@@ -4,6 +4,7 @@ from routers.users.auth import router as auth_router
 from routers.users.data import router as data_router
 from routers.users.rating import router as rating_router
 from routers.categories.data import router as categories_router
+from routers.stores.data import router as store_router
 
 app = FastAPI()
 
@@ -25,7 +26,7 @@ app.add_middleware(
 
 @app.get("/", summary="Main info")
 def read_item():
-    return {"data": "Hello"}
+    return {"data": "Documentation is available at /docs"}
 
 # Авторизация
 app.include_router(auth_router, prefix="/users", tags=["users"])
@@ -35,3 +36,5 @@ app.include_router(data_router, prefix="/users", tags=["users"])
 app.include_router(rating_router, prefix="/users", tags=["users_rating"])
 # Категории
 app.include_router(categories_router, prefix="/category", tags=["categories"])
+# Магазины
+app.include_router(store_router, prefix="/stores", tags=["stores"])

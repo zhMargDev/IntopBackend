@@ -90,12 +90,15 @@ class Store(Base):
     name = stores_table.c.name
     short_name = stores_table.c.short_name
     llc_name = stores_table.c.llc_name
+    store_main_picture = stores_table.c.store_main_picture
     address = stores_table.c.address
     region_id = stores_table.c.region_id
     category_id = stores_table.c.category_id
     owner_id = stores_table.c.owner_id
     rating = stores_table.c.rating
     is_verified = stores_table.c.is_verified
+    created_at = stores_table.c.created_at
+    last_active = stores_table.c.last_active
 
     # Связь с эл. почтами
     emails = relationship('StoreEmail', back_populates="store")

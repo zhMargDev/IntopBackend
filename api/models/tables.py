@@ -29,7 +29,8 @@ users_table = Table(
     Column('region_id', Integer, ForeignKey('regions.id'), nullable=True),
     Column('is_verified', Boolean, default=False),
     Column('is_active', Boolean, default=True),
-    Column('last_active', DateTime),
+    Column('created_at', DateTime, nullable=False),
+    Column('last_active', DateTime, nullable=False)
 )
 
 # Определение таблицы 'ratings'
@@ -59,12 +60,15 @@ stores_table = Table(
     Column('name', String(255), nullable=False),
     Column('short_name', String(100), nullable=False),
     Column('llc_name', String(255), nullable=True),
+    Column('store_main_picture', String(255), nullable=True),
     Column('address', String(255), nullable=True),
     Column('region_id', Integer, ForeignKey('regions.id'), nullable=True),
     Column('category_id', Integer, ForeignKey('categories.id'), nullable=False),
     Column('owner_id', Integer, ForeignKey('users.id')),
     Column('rating', Float, nullable=True),
-    Column('is_verified', Boolean, default=False)
+    Column('is_verified', Boolean, default=False),
+    Column('created_at', DateTime, nullable=False),
+    Column('last_active', DateTime, nullable=False)
 )
 
 # Определение таблицы 'store_emails'

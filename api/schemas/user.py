@@ -9,15 +9,6 @@ class TelegramInitData(BaseModel):
     last_name: str
     username: str
 
-# Схема для ответа по категории
-class CategoryOut(BaseModel):
-    id: int
-    name: str
-    subcategories: List['CategoryOut'] = []
-
-    class Config:
-        orm_mode = True
-
 class RatingCreate(BaseModel):
     rater_id: int
     rated_id: int
@@ -50,6 +41,7 @@ class UserResponse(BaseModel):
     region_id: Optional[int] = None
     is_verified: Optional[bool] = None
     is_active: bool
+    created_at: str
     last_active: str
 
     class Config:
