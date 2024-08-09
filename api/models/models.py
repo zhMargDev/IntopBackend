@@ -18,8 +18,21 @@ class Role(Base):
     name = roles_table.c.name
     permission = roles_table.c.permission
 
-    # Опциональная связь с User
+    # Связь с пользователями
     users = relationship('User', back_populates='role')
+
+# Определение класса Region, связанного с таблицей 'regions'
+class Region(Base):
+    __table__ = regions_table
+
+    id = regions_table.c.id
+    name = regions_table.c.name
+    parent_id = regions_table.c.parent_id
+
+    # Связь с дочерними регионами
+    parent = relationship('Region', remote_side=[id], backref='children')
+    # Связь с пользователями
+    users = relationship('User', back_populates='region')
 
 # Определение класса User, связанного с таблицей 'users'
 class User(Base):
@@ -40,10 +53,14 @@ class User(Base):
     is_active = users_table.c.is_active
     last_active = users_table.c.last_active
 
-    # Связь с другими таблицами
+    # Связь с ролью
     role = relationship('Role', back_populates='users')
-    region = relationship('Region', backref='users')
-    managed_stores = relationship('StoreManager', back_populates='user')
+    # Связь с регионом
+    region = relationship('Region', back_populates='users')
+    # Связь с моделю менеджеров
+    store_managers = relationship("StoreManager", back_populates="user")
+    # Связь с магазином
+    my_stores = relationship("Store", back_populates="owner")
 
 # Определение класса Rating, связанного с таблицей 'ratings'
 class Rating(Base):
@@ -63,7 +80,7 @@ class Category(Base):
     parent_id = categories_table.c.parent_id
 
     # Связь с дочерними категориями
-    parent = relationship('Category', remote_side=[categories_table.c.id], backref='children')
+    parent = relationship('Category', remote_side=[id], backref='children')
 
 # Определение класса Store, связанного с таблицей 'stores'
 class Store(Base):
@@ -80,13 +97,14 @@ class Store(Base):
     rating = stores_table.c.rating
     is_verified = stores_table.c.is_verified
 
-    # Связь с другими таблицами
-    owner = relationship('User', backref='stores')
-    category = relationship('Category', backref='stores')
-    region = relationship('Region', backref='stores')
-    emails = relationship('StoreEmail', backref='store')
-    phone_numbers = relationship('StorePhoneNumber', backref='store')
-    managers = relationship('StoreManager', back_populates='store')
+    # Связь с эл. почтами
+    emails = relationship('StoreEmail', back_populates="store")
+    # Связь с номерами телефонов
+    phone_numbers = relationship('StorePhoneNumber', back_populates="store")
+    #Связь с менеджерами 
+    managers = relationship('StoreManager', back_populates="store")
+    # Связь с создателем
+    owner = relationship('User', back_populates="my_stores")
 
 # Определение класса StoreEmail, связанного с таблицей 'store_emails'
 class StoreEmail(Base):
@@ -97,8 +115,8 @@ class StoreEmail(Base):
     email = store_emails_table.c.email
     email_type = store_emails_table.c.email_type
 
-    # Связь с Store
-    store = relationship('Store', backref='emails')
+    # Связь с магазином
+    store = relationship('Store', back_populates="emails")
 
 # Определение класса StorePhoneNumber, связанного с таблицей 'store_phone_numbers'
 class StorePhoneNumber(Base):
@@ -109,19 +127,8 @@ class StorePhoneNumber(Base):
     phone_number = store_phone_numbers_table.c.phone_number
     phone_type = store_phone_numbers_table.c.phone_type
 
-    # Связь с Store
-    store = relationship('Store', backref='phone_numbers')
-
-# Определение класса Region, связанного с таблицей 'regions'
-class Region(Base):
-    __table__ = regions_table
-
-    id = regions_table.c.id
-    name = regions_table.c.name
-    parent_id = regions_table.c.parent_id
-
-    # Связь с дочерними регионами
-    parent = relationship('Region', remote_side=[regions_table.c.id], backref='children')
+    # Связь с магазином
+    store = relationship('Store', back_populates="phone_numbers")
 
 # Определение класса StorePrivilege, связанного с таблицей 'store_privileges'
 class StorePrivilege(Base):
@@ -131,8 +138,8 @@ class StorePrivilege(Base):
     name = store_privileges_table.c.name
     access_level = store_privileges_table.c.access_level
 
-    # Связь с StoreManager
-    managers = relationship('StoreManager', back_populates='privilege')
+    # Связь с менеджером
+    manager = relationship('StoreManager', back_populates="privileges")
 
 # Определение класса StoreManager, связанного с таблицей 'store_managers'
 class StoreManager(Base):
@@ -143,7 +150,9 @@ class StoreManager(Base):
     user_id = store_managers_table.c.user_id
     privileges_id = store_managers_table.c.privileges_id
 
-    # Связь с Store
-    store = relationship('Store', back_populates='managers')
-    user = relationship('User', back_populates='managed_stores')
-    privilege = relationship('StorePrivilege', back_populates='managers')
+    # Связь с приыилегиями
+    privileges = relationship('StorePrivilege', back_populates="manager")
+    # Связь с магазином
+    store = relationship('Store', back_populates="managers")
+    # Связь с пользователем
+    user = relationship("User", back_populates="store_managers")

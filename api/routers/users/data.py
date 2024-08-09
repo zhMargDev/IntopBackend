@@ -1,8 +1,7 @@
-import shutil
-import os
+import shutil, os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, File, UploadFile, Form, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from starlette.responses import JSONResponse
 from datetime import datetime
 
@@ -237,6 +236,9 @@ async def get_users_by_filters(
         query = query.filter(User.region_id == filters.region_id)
     if filters.is_verified is not None:
         query = query.filter(User.is_verified == filters.is_verified)
+
+    # Добавляем загрузку связанных данных
+    query = query.options(joinedload(User.role), joinedload(User.region), joinedload(User.my_stores))
 
     # Выполняем запрос и получаем результаты
     users = query.all()

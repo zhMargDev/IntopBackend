@@ -1,4 +1,4 @@
-from models.models import metadata
+from models.tables import metadata
 
 from logging.config import fileConfig
 
