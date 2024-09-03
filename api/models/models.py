@@ -41,6 +41,7 @@ class User(Base):
     id = users_table.c.id
     telegram_id = users_table.c.telegram_id
     role_id = users_table.c.role_id
+    password = users_table.c.password
     username = users_table.c.username
     first_name = users_table.c.first_name
     second_name = users_table.c.second_name

@@ -9,4 +9,4 @@ class CategoryOut(BaseModel):
     subcategories: List['CategoryOut'] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True

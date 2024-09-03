@@ -1,6 +1,6 @@
 import shutil, os
 
-from fastapi import APIRouter, Depends, HTTPException, Request, File, UploadFile, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, File, UploadFile, Form, Query, Header
 from sqlalchemy.orm import Session, joinedload
 from starlette.responses import JSONResponse
 from datetime import datetime
@@ -10,45 +10,59 @@ from models.models import User
 from schemas.user import UserGetByFilters
 from utils.token import decode_access_token, update_token
 from config import BASE_DIR
+from documentation.users import data as user_documentation
+from schemas.user import *
+
 
 router = APIRouter()
 
-@router.put("/update", summary="Обновление данных пользователя",
-            description="""
-            Обновляет информацию о пользователе. Необходимо отправить форму с данными, которые требуется обновить.
-            При успешном обновлении возвращается сообщение об успешном обновлении.
+@router.get('/my_data', 
+             summary="Получени данных пользователя",
+             description=user_documentation.get_user_data)
+async def get_my_data(db: Session = Depends(get_db), authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=403, detail="Токен доступа отсутствует")
 
-            **Параметры формы:**
-            - `user_id`: Id пользователя для проверки совместимости с токеном, если не отправить то вернёться ошибка
-            - `first_name`: Имя пользователя (опционально)
-            - `second_name`: Фамилия пользователя (опционально)
-            - `username`: Имя пользователя (опционально)
-            - `phone_number`: Номер телефона (опционально)
-            - `email`: Адрес электронной почты (опционально)
-            - `region_id`: Идентификатор региона (опционально)
-            - `avatar`: Новый аватар пользователя (опционально)
+    # Извлечение токена из заголовка Authorization
+    token = authorization.split(" ")[1] if len(authorization.split(" ")) > 1 else None
 
-            ```
-            Пример Curl
-            curl -v -X PUT "http://localhost:8000/users/update" \
-              -H "Content-Type: multipart/form-data" \
-              -b "access_token=your_access_token" \
-              -F "user_id"=1 \
-              -F "first_name=John" \
-              -F "second_name=Doe" \
-              -F "username=johndoe" \
-              -F "phone_number=1234567890" \
-              -F "email=john.doe@example.com"
-            ```
+    if not token:
+        raise HTTPException(status_code=403, detail="Недействительный токен")
 
-            **Ответ:**
-            - Если обновление прошло успешно, возвращается сообщение о успешном обновлении данных.
+    # Получение user_id из токена
+    try:
+        payload = decode_access_token(token)
+        token_user_id = int(payload['sub'])
+    except HTTPException:
+        raise HTTPException(status_code=403, detail="Недействительный токен")
+    
+    user = db.query(User).filter(User.id == token_user_id).first()
 
-            **Ошибки:**
-            - `401 Unauthorized`: Токен доступа отсутствует или недействителен.
-            - `401 Unauthorized`: Недействительный пользователь. Отправленный id и id из токена не совпали или id не был отправлен.
-            - `404 Not Found`: Пользователь не найден.
-            """)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Устанавливаем время последней активности пользователя
+    user.last_active = datetime.now()
+
+    db.commit()
+    db.refresh(user)
+
+    # Переоброзование времени последней активности и даты создания в строку для передачи через json ! не сохраняем в базе
+    user.last_active = user.last_active.isoformat()
+    user.created_at = user.created_at.isoformat()
+
+    # Создаем ответ с использованием UserResponse
+    user_response = UserResponse.from_orm(user)
+
+    # Обновляем токен и устанавливаем его в куки
+    response = JSONResponse(content=user_response.dict())
+    response = update_token(response, user.id)
+    
+    return response
+
+@router.put("/update", 
+            summary="Обновление данных пользователя",
+            description=user_documentation.update_user)
 async def update_user(
         request: Request,
         user_id: int = Form(None),
@@ -126,28 +140,9 @@ async def update_user(
 
     return response
 
-@router.delete('/deactivate', summary="Деактивация (удаление) аккаунта пользователя",
-               description="""
-               Этот эндпоинт деактивирует аккаунт пользователя.
-
-               **Параметры запроса:**
-               - `user_id`: Идентификатор пользователя (необязательный параметр). Если не указан, то пользователь поддельный.
-
-               **Пример запроса**
-               curl -v -X DELETE "http://localhost:8000/users/deactivate" \
-                  -H "Content-Type: application/json" \
-                  -b "access_token=your_access_token" \
-                  -G \
-                  -d "user_id=1"
-
-               **Ответ:**
-               - Если деактивация успешна, возвращается сообщение о том, что аккаунт успешно деактивирован и токен доступа удаляется из куки.
-               - В случае отсутствия токена, его недействительности или несоответствия `user_id` возвращается ошибка.
-
-               **Ошибки:**
-               - `401 Unauthorized`: Токен доступа отсутствует, недействителен или `user_id` не совпадает.
-               - `404 Not Found`: Пользователь не найден.
-               """)
+@router.delete('/deactivate', 
+               summary="Деактивация (удаление) аккаунта пользователя",
+               description=user_documentation.deactivate_user)
 async def deactivate_account(
         request: Request,
         user_id: int = Query(None),
@@ -189,25 +184,9 @@ async def deactivate_account(
 
     return response
 
-@router.get('/by_filters', summary="Получение пользователей по фильтрам", 
-    description="""
-        Этот эндпоинт возвращает пользователей по указанным фильтрам.
-        Если фильтры не указаны, то вернутся все активные пользователи.
-
-        **Пример запроса**
-
-        ```
-        curl -X GET "http://localhost:8000/users/by_filters?id=1&username=johndoe"
-        ```
-
-        **Ответ:**
-        Если не было ошибки вернётся массив со всеми пользователями, соответствующими фильтрам, которые не удалили (деактивировали) свой аккаунт.
-        
-        **Ошибки:**
-        - `200`: Всё прошло успешно, данные получены.
-        - `403`: Пользователей не найдено
-        - `500`: Произошла ошибка на сервере.
-    """)
+@router.get('/by_filters', 
+            summary="Получение пользователей по фильтрам", 
+            description=user_documentation.get_users_by_filters)
 async def get_users_by_filters(
     filters: UserGetByFilters = Depends(),
     db: Session = Depends(get_db)

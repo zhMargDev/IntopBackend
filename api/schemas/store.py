@@ -18,5 +18,5 @@ class StoreResponse(BaseModel):
     last_active: str
     
     class Config:
-        orm_mode = True
+        from_attributes = True
         from_attributes=True

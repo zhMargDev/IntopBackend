@@ -20,3 +20,7 @@ python-jose
 starlette
 
 python-multipart
+
+requests
+passlib
+redis

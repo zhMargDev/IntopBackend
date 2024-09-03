@@ -1,66 +1,33 @@
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from passlib.context import CryptContext
 
 from database import get_db
 from models.models import User, Role
-from schemas.user import TelegramInitData, UserResponse
+from schemas.user import *
 from utils.token import decode_access_token, update_token
+from schemas.sms import *
+from documentation.users import auth as authorization_documentation
 
 router = APIRouter()
 
-@router.post("/tg_authorization", summary="Авторизация через Telegram",
-             description="""
-             Этот эндпоинт обрабатывает авторизацию пользователей через Telegram. 
-             Он получает информацию о пользователе из Telegram, обновляет или создает запись пользователя в базе данных, 
-             управляет токенами доступа.
+# Инициализация CryptContext для хеширования паролей
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-             **Запрос:**
+def get_password_hash(password):
+    # Хеширование пароля
+    return pwd_context.hash(password)
 
-             Отправьте POST-запрос на этот эндпоинт с JSON-данными в теле запроса:
+def verify_password(plain_password, hashed_password):
+    # Проверка 2х паролей с хешированием
+    return pwd_context.verify(plain_password, hashed_password)
 
-             ```json
-             {
-               "id": 123456789,  # Telegram ID пользователя
-               "first_name": "Иван",  # Имя пользователя
-               "last_name": "Иванов",  # Фамилия пользователя
-               "username": "ivan_ivanov"  # Username пользователя в Telegram
-             }
-             ```
-
-             Curl
-
-             ```
-             curl -v -X POST "http://localhost:8000/users/tg_authorization" -H "Content-Type: application/json" -d '{                                                                                                                    
-              "id": 123456789,
-              "first_name": "Иван",
-              "last_name": "Иванов",
-              "username": "ivan_ivanov"
-            }'
-             ```
-
-             **Ответ:**
-
-              В случае успешной авторизации вы получите JSON-ответ с токеном доступа, установленным в куке:
-
-             ```json
-             {
-               "message": "Авторизация прошла успешно, токен доступа установлен в куке."
-             }
-             ```
-
-             **Статусные коды:**
-
-             - **200 OK:** Авторизация прошла успешно, токен доступа установлен в куке.
-             - **400 Bad Request:** Неверный формат запроса.
-
-             **Примечания:**
-
-             - Если пользователь уже существует в базе данных, его информация будет обновлена предоставленными данными.
-             - Если пользователь новый, будет создана новая запись пользователя.
-             - Токены доступа действительны в течение 24 часов, при бездействии она будет удалено.
-             """)
+# Телеграм авторизация
+@router.post("/tg_authorization", 
+             summary="Авторизация через Telegram",
+             description=authorization_documentation.tg_authorization)
 async def tg_authorization(init_data: TelegramInitData, db: Session = Depends(get_db)):
     # Поиск пользователя по Telegram ID
     user = db.query(User).filter(User.telegram_id == str(init_data.id)).first()
@@ -104,51 +71,109 @@ async def tg_authorization(init_data: TelegramInitData, db: Session = Depends(ge
     
     return response
 
-@router.post('/my_data', summary="Получени данных пользователя",
-    description="""
-        Этот эндпоинт возвращает все данные пользователя исходя из id указанный в куки
+# Почта отправка смс
+@router.post("/email/sms", 
+             summary="Отправка кода подтверждения на email.",
+             description=authorization_documentation.email_sms)
+async def email_sms(request: EmailSMSRequest, db: Session = Depends(get_db)):
+    # Проверка валидности электронной почты
+    if not request.email:
+        raise HTTPException(status_code=401, detail="Электронная почта не действительная")
+    # Отправка кода подтверждения на эл. почту
+    return send_sms_to_email(request, db)
 
-        **Пример запроса**
-        curl -v -X POST "http://localhost:8000/users/my_data" \
-           -H "Content-Type: application/json" \
-           -b "access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzIzMzIyODMzfQ.1bwnUmgPwoo9AkT4eBU2P7aFAVPvnnfx_rCxtoyaceQ"
+# Почта регистрация
+@router.post("/email/reg", 
+             summary="Регистрация через электронную почту.",
+             description=authorization_documentation.email_reg)
+async def email_registration(request: EmailRegistrationRequest, db: Session = Depends(get_db)):
+    # Проверка валидности электронной почты
+    if not request.email:
+        raise HTTPException(status_code=401, detail="Электронная почта не действительная")
         
-        **Ответ:**
-        Если не было ошибки вернутся данные пользователя.
-        
-        **Ошибки:**
-        - `200`: Всё прошло успешно, данные получены.
-        - `403`: Пользователь не найдено, удалён или токен не действителен.
-        - `500`: Произошла ошибка на сервере.
-    """)
-async def get_my_data(request: Request, db: Session = Depends(get_db)):
-    # Извлечение токена из куки
-    token = request.cookies.get("access_token")
-
-    if not token:
-        raise HTTPException(status_code=403, detail="Токен доступа отсутствует")
-
-    # Получение user_id из токена
+    # Проверка валидности пароля
     try:
-        payload = decode_access_token(token)
-        token_user_id = int(payload['sub'])
-    except HTTPException:
-        raise HTTPException(status_code=403, detail="Недействительный токен")
+        EmailRegistrationRequest.validate_password(request.password)
+    except ValueError as e:
+        raise HTTPException(status_code=402, detail=str(e))
+
+    # Проверка на уникальность email и статус is_active
+    existing_user = db.query(User).filter(User.email == request.email).first()
+    if existing_user:
+        if existing_user.is_active:
+            raise HTTPException(status_code=403, detail="Пользователь с такой электронной почтой уже существует.")
+        else:
+            raise HTTPException(status_code=405, detail="Пользователь с такой электронной почтой заблокирован, вы можете его разблокировать.")
+        
+    # Получение и проверка кода верификации из редиса и запроса
+    verification_code = get_verification_code()
+
+    # Если нету кода верификации в базе или в запросе или же они не совпадают
+    if not request.code or not verification_code or verification_code != request.code:
+        raise HTTPException(status_code=406, detail="Код верификации не подходит")
+
+    # Хеширование пароля
+    hashed_password = get_password_hash(request.password)
+
+    # Создание нового пользователя с установкой None для неотправленных полей
+    new_user = User(
+        email=request.email,
+        password=hashed_password,
+        username=request.username,
+        first_name=request.first_name,
+        second_name=request.second_name,
+        is_verified=False,
+        is_active=True,
+        created_at=datetime.now(),
+        last_active=datetime.now()
+    )
+
+    # Добавление пользователя в базу данных
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    # Переоброзование времени последней активности в строку для передачи через json
+    new_user.last_active = new_user.last_active.isoformat()
+    # Создаем ответ с использованием UserResponse
+    user_response = UserResponse.from_orm(new_user)
+
+    # Обновляем токен и устанавливаем его в куки
+    response = JSONResponse(content=user_response.dict())
+    response = update_token(response, new_user.id)
     
-    user = db.query(User).first()
+    return response
 
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="Пользователя не существует")
+# Почта вход
+@router.post("/email/login", 
+             summary="Авторизация через электронную почту.",
+             description=authorization_documentation.email_login)
+async def email_login(request: EmailLoginRequest, db: Session = Depends(get_db)):
+    # Поиск пользователя по электронной почте
+    user = db.query(User).filter(User.email == request.email).first()
 
-    # Устанавливаем время последней активности пользователя
+    # Проверка наличия пользователя
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь с такой электронной почтой не найден.")
+
+    # Проверка правильности пароля
+    if not verify_password(request.password, user.password):
+        raise HTTPException(status_code=403, detail="Неверный пароль.")
+    
+    # Получение и проверка кода верификации из редиса и запроса
+    verification_code = get_verification_code()
+
+    # Если нету кода верификации в базе или в запросе или же они не совпадают
+    if not request.code or not verification_code or verification_code != request.code:
+        raise HTTPException(status_code=406, detail="Код верификации не подходит")
+
+    # Обновление времени последней активности
     user.last_active = datetime.now()
-
     db.commit()
     db.refresh(user)
 
-    # Переоброзование времени последней активности и даты создания в строку для передачи через json ! не сохраняем в базе
+    # Переоброзование времени последней активности в строку для передачи через json
     user.last_active = user.last_active.isoformat()
-    user.created_at = user.created_at.isoformat()
 
     # Создаем ответ с использованием UserResponse
     user_response = UserResponse.from_orm(user)
