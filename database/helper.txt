@@ -1,0 +1,6 @@
+После создания контейнера сделать следующее
+
+sudo docker ps
+sudo docker exec -it <container_id> bash
+psql -U intop -d intop_db
+CREATE DATABASE intop_services_db;
