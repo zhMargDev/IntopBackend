@@ -1,0 +1,9 @@
+Bash
+
+Start FastApi Dev mode - uvicorn main:app --reload
+Start FastApi Server mode - uvicorn main:app --host 127.0.0.1 --port 8000
+
+Database migrations
+
+Make a migration - alembic revision --autogenerate -m "<comment>"
+Upgrade database - alembic upgrade head

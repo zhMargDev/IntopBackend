@@ -5,11 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
-from routers.users.auth import router as auth_router
-from routers.users.data import router as data_router
-from routers.users.rating import router as rating_router
-from routers.categories.data import router as categories_router
-from routers.stores.data import router as store_router
+from routers.services.data import router as services_data
 
 app = FastAPI()
 
@@ -45,13 +41,8 @@ async def get_image(folder: str, filename: str):
     # Возвращаем файл как ответ
     return FileResponse(file_path)
 
-# Авторизация
-app.include_router(auth_router, prefix="/users", tags=["users"])
-# Получение или изменения данных пользователей
-app.include_router(data_router, prefix="/users", tags=["users"])
-# Оценка пользователей
-app.include_router(rating_router, prefix="/users", tags=["users_rating"])
-# Категории
-app.include_router(categories_router, prefix="/category", tags=["categories"])
-# Магазины
-app.include_router(store_router, prefix="/stores", tags=["stores"])
+# Сервисы
+app.include_router(services_data, prefix="/services", tags=["services"])
+
+# Монтируем статическую директорию, где будут храниться картинки
+app.mount("/static", StaticFiles(directory="static"), name="static")
