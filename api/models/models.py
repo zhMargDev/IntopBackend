@@ -201,7 +201,8 @@ class Advertisment(Base):
 
     id = advertisements_table.c.id
     name = advertisements_table.c.name
-    location = advertisements_table.c.location
+    lat = advertisements_table.c.lat
+    lon = advertisements_table.c.lon
     rating_count = advertisements_table.c.rating_count
     views_count = advertisements_table.c.views_count
     description = advertisements_table.c.description

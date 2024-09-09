@@ -87,7 +87,8 @@ async def get_advertisments(
 async def add_new_advertisment(
     user_id: int = Form(...),
     name: str = Form(...),
-    location: str = Form(...),
+    lat: float = Form(...),
+    lon: float = Form(...),
     description: str = Form(...),
     price: float = Form(...),
     owner_id: int = Form(...),
@@ -141,7 +142,8 @@ async def add_new_advertisment(
     # Создаем новый объект Advertisement
     new_advertisement = Advertisment(
         name=name,
-        location=location,
+        lat=lat,
+        lon=lon,
         rating_count=0,
         views_count=0,
         description=description,
@@ -175,7 +177,8 @@ async def update_advertisment(
     advertisement_id: int,
     user_id: int = Form(...),
     name: str = Form(None),
-    location: str = Form(None),
+    lat: float = Form(None),
+    lon: float = Form(None),
     description: str = Form(None),
     price: float = Form(None),
     date: int = Form(None),
@@ -220,8 +223,10 @@ async def update_advertisment(
     # Обновляем поля объявления, если они были переданы
     if name is not None:
         advertisement.name = name
-    if location is not None:
-        advertisement.location = location
+    if lat is not None:
+        advertisement.lat = lat
+    if lon is not None:
+        advertisement.lon = lon
     if description is not None:
         advertisement.description = description
     if price is not None:

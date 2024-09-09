@@ -31,7 +31,8 @@ class AdvertisementsWorkTimes(BaseModel):
 class AdvertismentSchema(BaseModel):
     id: int
     name: str
-    location: str
+    lat: float
+    lon: float
     rating_count: Optional[int] = 0
     views_count: Optional[int] = 0
     description: Optional[str] = None
