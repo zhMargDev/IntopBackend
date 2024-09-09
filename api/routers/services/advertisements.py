@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from documentation.services import advertisments as advertisments_documentation
 from database import get_db
-from models.models import Advertisment, User
+from models.models import Advertisment, User, BookedService
 from schemas.services.advertisments import *
 from utils.files import add_domain_to_picture
 from utils.token import decode_access_token, update_token
@@ -91,7 +91,9 @@ async def add_new_advertisment(
     description: str = Form(...),
     price: float = Form(...),
     owner_id: int = Form(...),
-    timer: int = Form(...),
+    date: int = Form(...),
+    email: str = Form(None),
+    phone_number: str = Form(None),
     picture: bytes = File(...),
     db: Session = Depends(get_db),
     authorization: str = Header(None)
@@ -146,9 +148,14 @@ async def add_new_advertisment(
         price=price,
         owner_id=owner_id,
         is_active=False,
-        timer=timer,
+        date=date,
         picture=file_name  # Сохраняем только имя файла без префикса static/
     )
+
+    if email is not None:
+        new_advertisement.email = email
+    if phone_number is not None:
+        new_advertisement.phone_number = phone_number
 
     # Добавляем объект в сессию и сохраняем в базе данных
     db.add(new_advertisement)
@@ -171,8 +178,10 @@ async def update_advertisment(
     location: str = Form(None),
     description: str = Form(None),
     price: float = Form(None),
-    timer: int = Form(None),
+    date: int = Form(None),
     picture: bytes = File(None),
+    phone_number: str = File(None),
+    email: str = File(None),
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
@@ -217,8 +226,12 @@ async def update_advertisment(
         advertisement.description = description
     if price is not None:
         advertisement.price = price
-    if timer is not None:
-        advertisement.timer = timer
+    if date is not None:
+        advertisement.date = date
+    if phone_number is not None:
+        advertisement.phone_number = phone_number
+    if email is not None:
+        advertisement.email = email
 
     # Если передано новое изображение, сохраняем его
     if picture is not None:
@@ -299,6 +312,65 @@ async def delete_advertisment(
 
     # Обновляем токен и устанавливаем его в куки
     response = JSONResponse(content={"message": "Объявление успешно удалено", "advertisement_id": advertisement_id})
+    response = update_token(response, token_user_id)
+    
+    return response
+
+@router.post('/book_service',
+             summary="Бронирование услуги.",
+             description=advertisments_documentation.book_service)
+async def book_service(
+    booking_data: BookServiceRequest,
+    db: Session = Depends(get_db),
+    authorization: str = Header(None)
+):
+    if not authorization:
+        raise HTTPException(status_code=403, detail="Токен доступа отсутствует")
+
+    # Извлечение токена из заголовка Authorization
+    token = authorization.split(" ")[1] if len(authorization.split(" ")) > 1 else None
+
+    if not token:
+        raise HTTPException(status_code=403, detail="Недействительный токен")
+
+    # Получение user_id из токена
+    try:
+        payload = decode_access_token(token)
+        token_user_id = int(payload['sub'])
+    except HTTPException:
+        raise HTTPException(status_code=403, detail="Недействительный токен")
+    
+    # Проверка, что user_id из токена совпадает с user_id из запроса
+    if token_user_id != booking_data.user_id:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    
+    # Проверка что пользовватель существует и активен
+    user = db.query(User).filter(User.id == token_user_id).first()
+
+    if not user or not user.is_active:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Проверка что объявление существует
+    advertisement = db.query(Advertisment).filter(Advertisment.id == booking_data.advertisement_id).first()
+
+    if not advertisement:
+        raise HTTPException(status_code=404, detail="Объявление не найдено")
+
+    # Создаем новую бронь
+    new_booking = BookedService(
+        user_id=booking_data.user_id,
+        advertisement_id=booking_data.advertisement_id,
+        date=booking_data.date,
+        time=booking_data.time
+    )
+
+    # Добавляем бронь в сессию и сохраняем в базе данных
+    db.add(new_booking)
+    db.commit()
+    db.refresh(new_booking)
+
+    # Обновляем токен и устанавливаем его в куки
+    response = JSONResponse(content={"message": "Услуга успешно забронирована", "booking_id": new_booking.id})
     response = update_token(response, token_user_id)
     
     return response

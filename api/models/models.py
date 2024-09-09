@@ -208,10 +208,38 @@ class Advertisment(Base):
     price = advertisements_table.c.price
     owner_id = advertisements_table.c.owner_id
     is_active = advertisements_table.c.is_active
-    timer = advertisements_table.c.timer
+    date = advertisements_table.c.date
     picture = advertisements_table.c.picture
+    phone_number = advertisements_table.c.phone_number
+    email = advertisements_table.c.email
 
     # Связь с сервисом
     service = relationship('Services', back_populates='advertisments')
     # Связь с способом оплаты
     payment_method = relationship('PaymentMethod', back_populates='advertisments')
+    # Связь с временем работы
+    work_times = relationship('AdvertisementsWorkTimes', back_populates='advertisement')
+
+# Определение таблицы рабочих часов объявления сервиса
+class AdvertisementsWorkTimes(Base):
+    __table__ = advertisements_work_times_table
+
+    id = advertisements_work_times_table.c.id
+    advertisement_id = advertisements_work_times_table.c.advertisement_id
+    is_morning = advertisements_work_times_table.c.is_morning
+    is_day = advertisements_work_times_table.c.is_day
+    is_evening = advertisements_work_times_table.c.is_evening
+    time_in_second = advertisements_work_times_table.c.time_in_second
+
+    # Связь с объявлением сервиса
+    advertisement = relationship('Advertisment', back_populates='work_times')
+
+# Определение таблицы забронированных сервисов
+class BookedService(Base):
+    __table__ = booked_services
+
+    id = booked_services.c.id
+    user_id = booked_services.c.user_id
+    advertisement_id = booked_services.c.advertisement_id
+    date = booked_services.c.date 
+    time = booked_services.c.time

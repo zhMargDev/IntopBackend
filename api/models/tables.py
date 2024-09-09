@@ -190,8 +190,33 @@ advertisements_table = Table(
     Column('price', Integer, nullable=False),
     Column('owner_id', Integer, nullable=False),
     Column('is_active', Boolean, nullable=False, default=False),
-    Column('timer', Integer, nullable=True, default=2592000), # 30 days timer until activation
+    Column('date', String(255), nullable=True),
+    Column('phone_number', String(255), nullable=True),
+    Column('email', String(255), nullable=True),
     Column('picture', String(255), nullable=True),
     Column('service_id', Integer, ForeignKey('services.id'), nullable=False),
     Column('payment_method_id', Integer,  ForeignKey('payment_methodes.id'), nullable=True)
+)
+
+# Таблица часов работы
+advertisements_work_times_table = Table(
+    'advertisements_work_times',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('advertisement_id', Integer, nullable=False),
+    Column('is_morning', Boolean),
+    Column('is_day', Boolean),
+    Column('is_evening', Boolean),
+    Column('time_in_second', Integer, nullable=False)
+)
+
+# Таблица забронированных сервисов
+booked_services = Table(
+    'booked_services_table',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('user_id', Integer, nullable=False),
+    Column('advertisement_id', Integer, nullable=False),
+    Column('date', String(255), nullable=False),
+    Column('time', Integer, nullable=False),
 )

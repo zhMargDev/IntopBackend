@@ -17,6 +17,17 @@ class PaymentMethodSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class AdvertisementsWorkTimes(BaseModel):
+    id: int
+    advertisement_id: int
+    is_morning: bool
+    is_day: bool
+    is_evening: bool
+    time_in_second: int
+
+    class Config:
+        from_attributes = True
+
 class AdvertismentSchema(BaseModel):
     id: int
     name: str
@@ -27,15 +38,19 @@ class AdvertismentSchema(BaseModel):
     price: float
     owner_id: int
     is_active: bool
-    timer: Optional[int] = None
+    date: Optional[str] = None
     picture: Optional[str] = None
+    phone_number: Optional[str] = None
+    email: Optional[str] = None
 
     # Вложенные модели
     service: Optional[ServiceSchema] = None
     payment_method: Optional[PaymentMethodSchema] = None
+    work_times: Optional[AdvertisementsWorkTimes] = None
 
     class Config:
         from_attributes = True
+
 
 class AdvertisementCreate(BaseModel):
     name: str = Field(..., description="Название объявления")
@@ -46,4 +61,12 @@ class AdvertisementCreate(BaseModel):
     price: float = Field(..., description="Цена")
     owner_id: int = Field(..., description="ID владельца")
     is_active: bool = Field(True, description="Активно ли объявление")
-    timer: int = Field(..., description="Таймер")
+    date: str = Field(..., description="Дата открытия")
+    phone_number: str = Field(..., description="Номер телефона")
+    email: str = Field(..., description="Эл почта")
+
+class BookServiceRequest(BaseModel):
+    user_id: int = Field(..., description="ID пользователя, который бронирует услугу")
+    advertisement_id: int = Field(..., description="ID объявления, которое бронируется")
+    date: str = Field(..., description="Дата бронирования в формате YYYY-MM-DD")
+    time: str = Field(..., description="Время бронирования в формате HH:MM")
