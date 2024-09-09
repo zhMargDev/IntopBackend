@@ -16,13 +16,17 @@ from utils.token import decode_access_token, update_token
 router = APIRouter()
 
 @router.get("/all", 
-             summary="Получение всех сервисов или конкретного сервиса по id",
+             summary="Получение всех объявлений или конкретного объявления по id",
              description=advertisments_documentation.get_all,
              response_model=List[AdvertismentSchema])
-async def get_all_advertisments(
+async def get_advertisments(
         request: Request,
         db: Session = Depends(get_db),
-        id: Optional[int] = Query(None, description="ID объявления для фильтрации")
+        id: Optional[int] = Query(None, description="ID объявления для фильтрации"),
+        service_id: Optional[int] = Query(None, description="ID сервиса для фильтрации"),
+        min_price: Optional[float] = Query(None, description="Минимальная цена для фильтрации"),
+        max_price: Optional[float] = Query(None, description="Максимальная цена для фильтрации"),
+        payment_method: Optional[str] = Query(None, description="Метод оплаты для фильтрации")
     ):
     # Если указан id, ищем объявление по этому id
     if id is not None:
@@ -40,8 +44,25 @@ async def get_all_advertisments(
         
         return [advertisment]
     
-    # Если id не указан, возвращаем все объявления
-    advertisments = db.query(Advertisment).all()
+    # Если указаны фильтры, применяем их
+    query = db.query(Advertisment)
+    
+    if service_id is not None:
+        query = query.filter(Advertisment.service_id == service_id)
+    
+    if min_price is not None and max_price is not None:
+        if min_price > max_price:
+            raise HTTPException(status_code=400, detail="Минимальная цена не может быть больше максимальной цены")
+        query = query.filter(Advertisment.price.between(min_price, max_price))
+    elif min_price is not None:
+        query = query.filter(Advertisment.price >= min_price)
+    elif max_price is not None:
+        query = query.filter(Advertisment.price <= max_price)
+    
+    if payment_method is not None:
+        query = query.filter(Advertisment.payment_method == payment_method)
+    
+    advertisments = query.all()
     
     # Если объявления не найдены, возвращаем 404 ошибку
     if not advertisments:
@@ -136,6 +157,148 @@ async def add_new_advertisment(
 
     # Обновляем токен и устанавливаем его в куки
     response = JSONResponse(content={"message": "Объявление успешно создано", "advertisement_id": new_advertisement.id})
+    response = update_token(response, token_user_id)
+    
+    return response
+
+@router.put('/update/{advertisement_id}',
+            summary="Обновление объявления.",
+            description=advertisments_documentation.update_advertisment)
+async def update_advertisment(
+    advertisement_id: int,
+    user_id: int = Form(...),
+    name: str = Form(None),
+    location: str = Form(None),
+    description: str = Form(None),
+    price: float = Form(None),
+    timer: int = Form(None),
+    picture: bytes = File(None),
+    db: Session = Depends(get_db),
+    authorization: str = Header(None)
+):
+    if not authorization:
+        raise HTTPException(status_code=403, detail="Токен доступа отсутствует")
+
+    # Извлечение токена из заголовка Authorization
+    token = authorization.split(" ")[1] if len(authorization.split(" ")) > 1 else None
+
+    if not token:
+        raise HTTPException(status_code=403, detail="Недействительный токен")
+
+    # Получение user_id из токена
+    try:
+        payload = decode_access_token(token)
+        token_user_id = int(payload['sub'])
+    except HTTPException:
+        raise HTTPException(status_code=403, detail="Недействительный токен")
+    
+    # Проверка, что owner_id из токена совпадает с owner_id из формы
+    if token_user_id != user_id:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    
+    # Проверка что пользовватель существует и активен
+    user = db.query(User).filter(User.id == token_user_id).first()
+
+    if not user or not user.is_active:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Получаем объявление для обновления
+    advertisement = db.query(Advertisment).filter(Advertisment.id == advertisement_id).first()
+
+    if not advertisement:
+        raise HTTPException(status_code=404, detail="Объявление не найдено")
+
+    # Обновляем поля объявления, если они были переданы
+    if name is not None:
+        advertisement.name = name
+    if location is not None:
+        advertisement.location = location
+    if description is not None:
+        advertisement.description = description
+    if price is not None:
+        advertisement.price = price
+    if timer is not None:
+        advertisement.timer = timer
+
+    # Если передано новое изображение, сохраняем его
+    if picture is not None:
+        upload_dir = "static/advertisements"
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
+
+        file_extension = picture.filename.split(".")[-1]
+        file_name = f"{name}_{advertisement.owner_id}.{file_extension}"
+        file_path = os.path.join(upload_dir, file_name)
+
+        with open(file_path, "wb") as buffer:
+            buffer.write(picture.file.read())
+
+        advertisement.picture = file_name
+
+    # Сохраняем изменения в базе данных
+    db.commit()
+    db.refresh(advertisement)
+
+    # Обновляем токен и устанавливаем его в куки
+    response = JSONResponse(content={"message": "Объявление успешно обновлено", "advertisement_id": advertisement.id})
+    response = update_token(response, token_user_id)
+    
+    return response
+
+
+@router.delete('/delete/{advertisement_id}',
+               summary="Удаление объявления.",
+               description=advertisments_documentation.delete_advertisment)
+async def delete_advertisment(
+    advertisement_id: int,
+    user_id: int = Form(...),
+    db: Session = Depends(get_db),
+    authorization: str = Header(None)
+):
+    if not authorization:
+        raise HTTPException(status_code=403, detail="Токен доступа отсутствует")
+
+    # Извлечение токена из заголовка Authorization
+    token = authorization.split(" ")[1] if len(authorization.split(" ")) > 1 else None
+
+    if not token:
+        raise HTTPException(status_code=403, detail="Недействительный токен")
+
+    # Получение user_id из токена
+    try:
+        payload = decode_access_token(token)
+        token_user_id = int(payload['sub'])
+    except HTTPException:
+        raise HTTPException(status_code=403, detail="Недействительный токен")
+    
+    # Проверка, что owner_id из токена совпадает с owner_id из формы
+    if token_user_id != user_id:
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    
+    # Проверка что пользовватель существует и активен
+    user = db.query(User).filter(User.id == token_user_id).first()
+
+    if not user or not user.is_active:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Получаем объявление для удаления
+    advertisement = db.query(Advertisment).filter(Advertisment.id == advertisement_id).first()
+
+    if not advertisement:
+        raise HTTPException(status_code=404, detail="Объявление не найдено")
+
+    # Удаляем изображение, если оно существует
+    if advertisement.picture:
+        picture_path = os.path.join("static/advertisements", advertisement.picture)
+        if os.path.exists(picture_path):
+            os.remove(picture_path)
+
+    # Удаляем объявление
+    db.delete(advertisement)
+    db.commit()
+
+    # Обновляем токен и устанавливаем его в куки
+    response = JSONResponse(content={"message": "Объявление успешно удалено", "advertisement_id": advertisement_id})
     response = update_token(response, token_user_id)
     
     return response

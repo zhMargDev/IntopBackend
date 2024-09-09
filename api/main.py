@@ -31,11 +31,18 @@ app.add_middleware(
     allow_headers=["*"],  # Позволяет все заголовки
 )
 
-@app.get("/", summary="Main info")
+@app.get("/", tags=["Основная"], 
+         summary="Основная информация для перехода в документацию.")
 def read_item():
     return {"data": "Documentation is available at /docs"}
 
-@app.get("/file/{folder}/{filename}")
+@app.get("/file/{folder}/{filename}",
+         tags=["Получение картинок."],
+         summary="Получение картинки по URL.",
+         description="""
+            Указывается URL адрес картинки к примеру <domain>/file/<папка>/<название картинки.расширение>.
+            В ответе будет получена картинка.
+        """)
 async def get_image(folder: str, filename: str):
     # Формируем полный путь к файлу
     file_path = os.path.join("static", folder, filename)
@@ -48,16 +55,16 @@ async def get_image(folder: str, filename: str):
     return FileResponse(file_path)
 
 # Авторизация
-app.include_router(auth_router, prefix="/users", tags=["users"])
+app.include_router(auth_router, prefix="/users", tags=["Авторизация"])
 # Получение или изменения данных пользователей
-app.include_router(data_router, prefix="/users", tags=["users"])
+app.include_router(data_router, prefix="/users", tags=["Пользователи"])
 # Оценка пользователей
-app.include_router(rating_router, prefix="/users", tags=["users_rating"])
+app.include_router(rating_router, prefix="/users", tags=["Рейтинг пользователей"])
 # Категории
-app.include_router(categories_router, prefix="/category", tags=["categories"])
+app.include_router(categories_router, prefix="/category", tags=["Категории"])
 # Магазины
-app.include_router(store_router, prefix="/stores", tags=["stores"])
+app.include_router(store_router, prefix="/stores", tags=["Магазины и компании"])
 # Сервисы
-app.include_router(services_router, prefix="/services", tags=["services"])
+app.include_router(services_router, prefix="/services", tags=["Сервисы"])
 # Объявления сервисов
-app.include_router(advertisements_router, prefix="/advertisements", tags=["advertisements"])
+app.include_router(advertisements_router, prefix="/advertisements", tags=["Объявления сервисов"])
