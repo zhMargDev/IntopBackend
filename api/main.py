@@ -10,6 +10,8 @@ from routers.users.data import router as data_router
 from routers.users.rating import router as rating_router
 from routers.categories.data import router as categories_router
 from routers.stores.data import router as store_router
+from routers.services.services import router as services_router
+from routers.services.advertisements import router as advertisements_router
 
 app = FastAPI()
 
@@ -55,3 +57,7 @@ app.include_router(rating_router, prefix="/users", tags=["users_rating"])
 app.include_router(categories_router, prefix="/category", tags=["categories"])
 # Магазины
 app.include_router(store_router, prefix="/stores", tags=["stores"])
+# Сервисы
+app.include_router(services_router, prefix="/services", tags=["services"])
+# Объявления сервисов
+app.include_router(advertisements_router, prefix="/advertisements", tags=["advertisements"])

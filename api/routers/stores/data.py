@@ -10,60 +10,12 @@ from models.models import User, Store
 from schemas.store import StoreResponse
 from utils.token import decode_access_token, update_token
 from config import BASE_DIR
-
-
+from documentation.stores import data as stores_documentation
 
 router = APIRouter()
 
 @router.post('/create', summary="Создание нового магазина",
-            description="""
-            Данный эндпоинт добавляет новый магазин в систему.
-
-            **Условия**
-            - Пользователь должен быть верифицированным.
-            - Название магазина не должно уже существовать.
-            - Краткое название магазина не должно уже существовать.
-            - LLC магазина не должно уже существовать.
-
-            **Параметры формы:**
-            - `name`: Название магазина (обязательное поле). Должно быть уникальным.
-            - `short_name`: Краткое название магазина (обязательное поле). Должно быть уникальным.
-            - `llc_name`: Название LLC (опционально). Если предоставлено, должно быть уникальным.
-            - `store_main_picture`: Основное изображение магазина (опционально). Путь к изображению.
-            - `address`: Адрес магазина (опционально).
-            - `region_id`: Идентификатор региона, к которому относится магазин (опционально). Должен существовать в базе данных.
-            - `category_id`: Идентификатор категории магазина (обязательное поле). Должен существовать в базе данных.
-
-            **Аутентификация**
-            - Необходимо указать JWT-токен в куки. Токен будет проверен для аутентификации пользователя.
-
-            ```
-            Пример Curl
-            curl -v -X POST "http://localhost:8000/stores/create" \
-              -H "Content-Type: application/json" \
-              -b "access_token=your_access_token" \
-              -d '{
-                "name": "Магазин А",
-                "short_name": "МА",
-                "llc_name": "Магазин А LLC",
-                "store_main_picture": "path/to/image.jpg",
-                "address": "Улица 1, дом 2",
-                "region_id": 1,
-                "category_id": 2,
-                "is_verified": true
-              }'
-            ```
-
-            **Ответ:**
-            - Если магазин успешно создан, возвращается сообщение об успешном создании с данными нового магазина.
-
-            **Ошибки:**
-            - `400 Bad Request`: Отсутствуют обязательные поля или данные неверны (например, `name` или `short_name` отсутствуют).
-            - `400 Bad Request`: LLC магазина уже существует.
-            - `401 Unauthorized`: Отсутствует JWT-токен в куки или токен недействителен.
-            - `404 Not Found`: Указанный `region_id` или `category_id` не существуют.
-            - `500 Internal Server Error`: Ошибка на сервере при создании магазина.
-            """)
+            description=stores_documentation.create_store)
 async def create(
         request: Request,
         user_id: int = Form(...), # Id пользователя
