@@ -142,8 +142,8 @@ store_privileges_table = Table(
 """SERVICES"""
 
 # Таблица сервисов
-services_table = Table(
-    'services',
+services_categories_table = Table(
+    'services_categories',
     metadata,
     Column('id', Integer, primary_key=True, autoincrement=True),
     Column('title', String(255)),
@@ -160,26 +160,26 @@ payment_methodes_table = Table(
 )
 
 # Таблица рейтинга объявления
-advertisements_ratings_table = Table(
-    'advertisements_ratings',
+services_ratings_table = Table(
+    'services_ratings',
     metadata,
     Column('id', Integer, primary_key=True, autoincrement=True),
-    Column('advertisement_id', Integer, nullable=False),
+    Column('service_id', Integer, nullable=False),
     Column('rater_id', Integer, nullable=False)
 )
 
 # Таблица количество просмотров
-advertisements_views_table = Table(
-    'advertisements_views',
+services_views_table = Table(
+    'services_views',
     metadata,
     Column('id', Integer, primary_key=True, autoincrement=True),
-    Column('advertisement_id', Integer, nullable=False),
+    Column('service_id', Integer, nullable=False),
     Column('rater_id', Integer, nullable=False)
 )
 
 # Таблица объявлений
-advertisements_table = Table(
-    'advertisements',
+services_table = Table(
+    'services',
     metadata,
     Column('id', Integer, primary_key=True, autoincrement=True),
     Column('name', String(255), nullable=False),
@@ -194,17 +194,18 @@ advertisements_table = Table(
     Column('date', String(255), nullable=True),
     Column('phone_number', String(255), nullable=True),
     Column('email', String(255), nullable=True),
+    Column('is_store', Boolean, nullable=True),
     Column('picture', String(255), nullable=True),
     Column('service_id', Integer, ForeignKey('services.id'), nullable=False),
     Column('payment_method_id', Integer,  ForeignKey('payment_methodes.id'), nullable=True)
 )
 
 # Таблица часов работы
-advertisements_work_times_table = Table(
-    'advertisements_work_times',
+services_work_times_table = Table(
+    'services_work_times',
     metadata,
     Column('id', Integer, primary_key=True, autoincrement=True),
-    Column('advertisement_id', Integer, nullable=False),
+    Column('service_id', Integer, nullable=False),
     Column('is_morning', Boolean),
     Column('is_day', Boolean),
     Column('is_evening', Boolean),
@@ -217,7 +218,7 @@ booked_services = Table(
     metadata,
     Column('id', Integer, primary_key=True, autoincrement=True),
     Column('user_id', Integer, nullable=False),
-    Column('advertisement_id', Integer, nullable=False),
+    Column('service_id', Integer, nullable=False),
     Column('date', String(255), nullable=False),
     Column('time', Integer, nullable=False),
 )

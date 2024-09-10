@@ -160,15 +160,15 @@ class StoreManager(Base):
 
 """SERVICES"""
 # Определение класса сервисов
-class Services(Base):
-    __table__= services_table
+class ServicesCategories(Base):
+    __table__= services_categories_table
 
-    id = services_table.c.id
-    title = services_table.c.title
-    description = services_table.c.description
-    picture = services_table.c.picture
+    id = services_categories_table.c.id
+    title = services_categories_table.c.title
+    description = services_categories_table.c.description
+    picture = services_categories_table.c.picture
 
-    advertisments = relationship('Advertisment', back_populates='service')
+    service = relationship('Service', back_populates='service_category')
 
 # Определение таблицы способов оплаты
 class PaymentMethod(Base):
@@ -177,63 +177,64 @@ class PaymentMethod(Base):
     id = payment_methodes_table.c.id
     methods_name = payment_methodes_table.c.method_name
 
-    advertisments = relationship('Advertisment', back_populates='payment_method')
+    service = relationship('Service', back_populates='payment_method')
 
 # Определение таблицы рейтинга объявления
-class AdvertismentRating(Base):
-    __table__ = advertisements_ratings_table
+class ServiceRating(Base):
+    __table__ = services_ratings_table
 
-    id = advertisements_ratings_table.c.id
-    advertisement_id = advertisements_ratings_table.c.advertisement_id
-    rater_id = advertisements_ratings_table.c.rater_id
+    id = services_ratings_table.c.id
+    service_id = services_ratings_table.c.service_id
+    rater_id = services_ratings_table.c.rater_id
 
 # Определение таблицы количество просмотров
-class AdvertismentViews(Base):
-    __table__ = advertisements_views_table
+class ServiceViews(Base):
+    __table__ = services_views_table
 
-    id = advertisements_views_table.c.id
-    advertisement_id = advertisements_views_table.c.advertisement_id
-    rater_id = advertisements_views_table.c.rater_id
+    id = services_views_table.c.id
+    service_id = services_views_table.c.service_id
+    rater_id = services_views_table.c.rater_id
 
 # Определение таблицы объявлений
-class Advertisment(Base):
-    __table__ = advertisements_table
+class Service(Base):
+    __table__ = services_table
 
-    id = advertisements_table.c.id
-    name = advertisements_table.c.name
-    lat = advertisements_table.c.lat
-    lon = advertisements_table.c.lon
-    rating_count = advertisements_table.c.rating_count
-    views_count = advertisements_table.c.views_count
-    description = advertisements_table.c.description
-    price = advertisements_table.c.price
-    owner_id = advertisements_table.c.owner_id
-    is_active = advertisements_table.c.is_active
-    date = advertisements_table.c.date
-    picture = advertisements_table.c.picture
-    phone_number = advertisements_table.c.phone_number
-    email = advertisements_table.c.email
+    id = services_table.c.id
+    name = services_table.c.name
+    lat = services_table.c.lat
+    lon = services_table.c.lon
+    rating_count = services_table.c.rating_count
+    views_count = services_table.c.views_count
+    description = services_table.c.description
+    price = services_table.c.price
+    owner_id = services_table.c.owner_id
+    is_active = services_table.c.is_active
+    date = services_table.c.date
+    picture = services_table.c.picture
+    is_store = services_table.c.is_store
+    phone_number = services_table.c.phone_number
+    email = services_table.c.email
 
     # Связь с сервисом
-    service = relationship('Services', back_populates='advertisments')
+    service_category = relationship('Services', back_populates='service')
     # Связь с способом оплаты
-    payment_method = relationship('PaymentMethod', back_populates='advertisments')
+    payment_method = relationship('PaymentMethod', back_populates='service')
     # Связь с временем работы
-    work_times = relationship('AdvertisementsWorkTimes', back_populates='advertisement')
+    work_times = relationship('ServiceWorkTimes', back_populates='service')
 
 # Определение таблицы рабочих часов объявления сервиса
-class AdvertisementsWorkTimes(Base):
-    __table__ = advertisements_work_times_table
+class ServiceWorkTimes(Base):
+    __table__ = services_work_times_table
 
-    id = advertisements_work_times_table.c.id
-    advertisement_id = advertisements_work_times_table.c.advertisement_id
-    is_morning = advertisements_work_times_table.c.is_morning
-    is_day = advertisements_work_times_table.c.is_day
-    is_evening = advertisements_work_times_table.c.is_evening
-    time_in_second = advertisements_work_times_table.c.time_in_second
+    id = services_work_times_table.c.id
+    service_id = services_work_times_table.c.service_id
+    is_morning = services_work_times_table.c.is_morning
+    is_day = services_work_times_table.c.is_day
+    is_evening = services_work_times_table.c.is_evening
+    time_in_second = services_work_times_table.c.time_in_second
 
     # Связь с объявлением сервиса
-    advertisement = relationship('Advertisment', back_populates='work_times')
+    service = relationship('Service', back_populates='work_times')
 
 # Определение таблицы забронированных сервисов
 class BookedService(Base):
@@ -241,6 +242,6 @@ class BookedService(Base):
 
     id = booked_services.c.id
     user_id = booked_services.c.user_id
-    advertisement_id = booked_services.c.advertisement_id
+    service_id = booked_services.c.service_id
     date = booked_services.c.date 
     time = booked_services.c.time
