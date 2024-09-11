@@ -196,8 +196,8 @@ services_table = Table(
     Column('email', String(255), nullable=True),
     Column('is_store', Boolean, nullable=True),
     Column('picture', String(255), nullable=True),
-    Column('service_id', Integer, ForeignKey('services.id'), nullable=False),
-    Column('payment_method_id', Integer,  ForeignKey('payment_methodes.id'), nullable=True)
+    Column('service_id', Integer, nullable=False),
+    Column('payment_method_id', Integer, nullable=True)
 )
 
 # Таблица часов работы

@@ -17,7 +17,7 @@ class PaymentMethodSchema(BaseModel):
     class Config:
         from_attributes = True
 
-class ServiceWorkTimes(BaseModel):
+class ServiceWorkTimesSchema(BaseModel):
     id: int
     service_id: int
     is_morning: bool
@@ -43,20 +43,17 @@ class ServiceSchema(BaseModel):
     picture: Optional[str] = None
     phone_number: Optional[str] = None
     email: Optional[str] = None
+    service_id: int
+    payment_method_id: int
     is_store: bool
-
-    # Вложенные модели
-    service: Optional[ServiceCategorySchema] = None
-    payment_method: Optional[PaymentMethodSchema] = None
-    work_times: Optional[ServiceWorkTimes] = None
 
     class Config:
         from_attributes = True
 
-
 class ServiceCreate(BaseModel):
     name: str = Field(..., description="Название объявления")
-    location: str = Field(..., description="Местоположение объявления")
+    lat: float = Field(..., description="Широта")
+    lon: float = Field(..., description="Долгота")
     rating_count: int = Field(0, description="Количество оценок")
     views_count: int = Field(0, description="Количество просмотров")
     description: str = Field(..., description="Описание объявления")
@@ -66,6 +63,10 @@ class ServiceCreate(BaseModel):
     date: str = Field(..., description="Дата открытия")
     phone_number: str = Field(..., description="Номер телефона")
     email: str = Field(..., description="Эл почта")
+    is_store: bool = Field(..., description="Является ли объявление магазином")
+    picture: Optional[str] = Field(None, description="URL изображения")
+    service_id: int = Field(..., description="ID категории сервиса")
+    payment_method_id: Optional[int] = Field(None, description="ID способа оплаты")
 
 class BookServiceRequest(BaseModel):
     user_id: int = Field(..., description="ID пользователя, который бронирует услугу")

@@ -168,16 +168,12 @@ class ServicesCategories(Base):
     description = services_categories_table.c.description
     picture = services_categories_table.c.picture
 
-    service = relationship('Service', back_populates='service_category')
-
 # Определение таблицы способов оплаты
 class PaymentMethod(Base):
     __table__ = payment_methodes_table
 
     id = payment_methodes_table.c.id
     methods_name = payment_methodes_table.c.method_name
-
-    service = relationship('Service', back_populates='payment_method')
 
 # Определение таблицы рейтинга объявления
 class ServiceRating(Base):
@@ -214,13 +210,8 @@ class Service(Base):
     is_store = services_table.c.is_store
     phone_number = services_table.c.phone_number
     email = services_table.c.email
-
-    # Связь с сервисом
-    service_category = relationship('Services', back_populates='service')
-    # Связь с способом оплаты
-    payment_method = relationship('PaymentMethod', back_populates='service')
-    # Связь с временем работы
-    work_times = relationship('ServiceWorkTimes', back_populates='service')
+    service_id = services_table.c.service_id
+    payment_method_id = services_table.c.payment_method_id
 
 # Определение таблицы рабочих часов объявления сервиса
 class ServiceWorkTimes(Base):
@@ -232,9 +223,6 @@ class ServiceWorkTimes(Base):
     is_day = services_work_times_table.c.is_day
     is_evening = services_work_times_table.c.is_evening
     time_in_second = services_work_times_table.c.time_in_second
-
-    # Связь с объявлением сервиса
-    service = relationship('Service', back_populates='work_times')
 
 # Определение таблицы забронированных сервисов
 class BookedService(Base):
