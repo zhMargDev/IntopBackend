@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from documentation.services import services as services_documentation
 from database import get_db
-from models.models import Service, User, BookedService
+from models.models import Service, User, BookedService, ServicesCategories, PaymentMethod
 from schemas.services.services import *
 from utils.files import add_domain_to_picture
 from utils.token import decode_access_token, update_token
@@ -95,7 +95,9 @@ async def add_new_service(
     email: str = Form(None),
     phone_number: str = Form(None),
     is_store: bool = Form(...),
-    picture: bytes = File(...),
+    picture: UploadFile = File(...),
+    service_category_id: int = Form(...),
+    payment_method_id: int = Form(None),
     db: Session = Depends(get_db),
     authorization: str = Header(None)
 ):
@@ -119,11 +121,22 @@ async def add_new_service(
     if token_user_id != user_id:
         raise HTTPException(status_code=403, detail="Недостаточно прав")
     
-    # Проверка что пользовватель существует и активен
+    # Проверка что пользователь существует и активен
     user = db.query(User).filter(User.id == token_user_id).first()
 
     if not user or not user.is_active:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Проверка существования категории сервиса
+    service_category = db.query(ServicesCategories).filter(ServicesCategories.id == service_category_id).first()
+    if not service_category:
+        raise HTTPException(status_code=404, detail="Категория сервиса не найдена")
+
+    # Проверка существования способа оплаты, если указан
+    if payment_method_id:
+        payment_method = db.query(PaymentMethod).filter(PaymentMethod.id == payment_method_id).first()
+        if not payment_method:
+            raise HTTPException(status_code=404, detail="Способ оплаты не найден")
 
     # Путь к папке для сохранения изображений
     upload_dir = "static/services"
@@ -137,7 +150,7 @@ async def add_new_service(
 
     # Сохраняем файл
     with open(file_path, "wb") as buffer:
-        buffer.write(picture.file.read())
+        buffer.write(await picture.read())
 
     # Создаем новый объект service
     new_service = Service(
@@ -152,7 +165,9 @@ async def add_new_service(
         is_active=False,
         date=date,
         is_store=is_store,
-        picture=file_name  # Сохраняем только имя файла без префикса static/
+        picture=file_name,  # Сохраняем только имя файла без префикса static/
+        service_category_id=service_category_id,
+        payment_method_id=payment_method_id
     )
 
     if email is not None:
@@ -166,7 +181,7 @@ async def add_new_service(
     db.refresh(new_service)
 
     # Обновляем токен и устанавливаем его в куки
-    response = JSONResponse(content={"message": "Сервис успешно создано", "service_id": new_service.id})
+    response = JSONResponse(content={"message": "Сервис успешно создан", "service_id": new_service.id})
     response = update_token(response, token_user_id)
     
     return response

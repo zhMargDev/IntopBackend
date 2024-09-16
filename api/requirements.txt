@@ -1,6 +1,7 @@
 # FastAPI and ASGI server
 fastapi
 uvicorn[standard]
+firebase-admin
 
 # SQLAlchemy and database drivers
 sqlalchemy

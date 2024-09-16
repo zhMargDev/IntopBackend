@@ -5,6 +5,25 @@ from typing import List, Optional
 from datetime import datetime
 
 
+class User(BaseModel):
+    uid: Optional[str] = None
+    username: str
+    email: Optional[EmailStr] = None
+    role: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    avatar: Optional[str] = None
+    rating: int = Field(default=0)
+    region_id: Optional[int] = None
+    is_verified: Optional[bool] = None
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.now)
+    last_active: datetime = Field(default_factory=datetime.now)
+    password: str
+    verification_id: Optional[str] = None
+    verification_code: Optional[str] = None
+
 # Pydantic модель для получения данных
 class TelegramInitData(BaseModel):
     id: int
@@ -18,17 +37,14 @@ class RatingCreate(BaseModel):
     rating: float = Field(..., gt=0, lt=6)  # Предполагаем, что рейтинг от 1 до 5
 
 class UserGetByFilters(BaseModel):
-    id: Optional[int] = None
-    telegram_id: Optional[int] = None
-    role_id: Optional[int] = None
+    uid: Optional[str] = None
+    role: Optional[str] = None
     username: Optional[str] = None
     first_name: Optional[str] = None
-    second_name: Optional[str] = None
+    last_name: Optional[str] = None
     phone_number: Optional[str] = None
     email: Optional[str] = None
     region_id: Optional[int] = None
-    is_verified: Optional[int] = None
-
 
 class UserResponse(BaseModel):
     id: int
