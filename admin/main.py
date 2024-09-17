@@ -10,7 +10,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = DB_CONNECT
 db = SQLAlchemy(app)
 
 # Импортируйте ваши модели
-from models.models import Role, User, Rating, Category, Store, StoreEmail, StorePhoneNumber, Region
+from models.models import *
 
 admin = Admin(app, name='My Admin', template_mode='bootstrap3')
 admin.add_view(ModelView(Role, db.session))

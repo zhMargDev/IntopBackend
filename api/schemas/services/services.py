@@ -29,7 +29,7 @@ class ServiceWorkTimesSchema(BaseModel):
         from_attributes = True
 
 class ServiceSchema(BaseModel):
-    id: int
+    id: str
     name: str
     lat: float
     lon: float
@@ -37,18 +37,18 @@ class ServiceSchema(BaseModel):
     views_count: Optional[int] = 0
     description: Optional[str] = None
     price: float
+    currency: str
     owner_id: int
     is_active: bool
-    date: Optional[str] = None
+    date: Optional[int] = None
     picture: Optional[str] = None
     phone_number: Optional[str] = None
     email: Optional[str] = None
-    service_id: int
+    service_category_id: int
     payment_method_id: int
     is_store: bool
-
-    class Config:
-        from_attributes = True
+    created_at: str
+    payment_method: Optional[str] = None
 
 class ServiceCreate(BaseModel):
     name: str = Field(..., description="Название объявления")

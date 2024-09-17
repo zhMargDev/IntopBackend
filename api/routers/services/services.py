@@ -1,5 +1,7 @@
-import os
+import os, shortuuid
+import firebase_conf
 
+from firebase_admin import auth, db, storage
 from fastapi import APIRouter, Depends, HTTPException, Request, File, UploadFile, Form, Query, Header
 from sqlalchemy.orm import Session, joinedload
 from starlette.responses import JSONResponse
@@ -12,6 +14,9 @@ from models.models import Service, User, BookedService, ServicesCategories, Paym
 from schemas.services.services import *
 from utils.files import add_domain_to_picture
 from utils.token import decode_access_token, update_token
+from utils.user import get_current_user
+from utils.services_categories import get_services_categories
+from utils.services import get_payment_method, get_service_by_id, update_service_in_db, delete_service_from_db, delete_picture_from_storage
 
 router = APIRouter()
 
@@ -20,322 +25,214 @@ router = APIRouter()
              description=services_documentation.get_all,
              response_model=List[ServiceSchema])
 async def get_services(
-        request: Request,
-        db: Session = Depends(get_db),
-        id: Optional[int] = Query(None, description="ID сервиса для фильтрации"),
-        service_id: Optional[int] = Query(None, description="ID сервиса для фильтрации"),
+        id: Optional[str] = Query(None, description="ID сервиса для фильтрации"),
+        service_category_id: Optional[int] = Query(None, description="ID сервиса для фильтрации"),
         min_price: Optional[float] = Query(None, description="Минимальная цена для фильтрации"),
         max_price: Optional[float] = Query(None, description="Максимальная цена для фильтрации"),
-        payment_method: Optional[str] = Query(None, description="Метод оплаты для фильтрации")
+        payment_method_id: Optional[int] = Query(None, description="Метод оплаты для фильтрации")
     ):
-    # Если указан id, ищем Сервис по этому id
+    # Если указан id, находим и возвращаем услугу по id
     if id is not None:
-        service = db.query(Service).filter(Service.id == id).first()
-        if not service:
-            raise HTTPException(status_code=404, detail="Сервис не найдено")
-        
-        # Добавляем домен к пути изображения сервиса
-        if service.picture:
-            service.picture = add_domain_to_picture(request, service.picture)
-        
-        # Добавляем домен к изображению сервиса, если он существует
-        if service.service and service.service.picture:
-            service.service.picture = add_domain_to_picture(request, service.service.picture)
-        
-        return [service]
-    
-    # Если указаны фильтры, применяем их
-    query = db.query(Service)
-    
-    if service_id is not None:
-        query = query.filter(Service.service_id == service_id)
-    
-    if min_price is not None and max_price is not None:
-        if min_price > max_price:
-            raise HTTPException(status_code=400, detail="Минимальная цена не может быть больше максимальной цены")
-        query = query.filter(Service.price.between(min_price, max_price))
-    elif min_price is not None:
-        query = query.filter(Service.price >= min_price)
-    elif max_price is not None:
-        query = query.filter(Service.price <= max_price)
-    
-    if payment_method is not None:
-        query = query.filter(Service.payment_method == payment_method)
-    services = query.all()
-    
-    # Если сервиса не найдены, возвращаем 404 ошибку
-    if not services:
-        raise HTTPException(status_code=404, detail="сервисов не найдено")
-    
-    # Добавляем домен к пути изображения для каждого сервиса и изображения сервиса
+        ref = db.reference(f'/services/{id}')
+        data = ref.get()
+
+        if not data:
+            raise HTTPException(status_code=404, detail="Услуга по указанному id не найдена.")
+
+        return [data]
+
+    # Получаем ссылку на узел услуг
+    ref = db.reference('/services')
+    data = ref.get()
+
+    if not data:
+        raise HTTPException(status_code=404, detail="Услуги не найдены.")
+
+    # Преобразуем данные в список
+    services = list(data.values())
+
+    # Применяем фильтры
+    if service_category_id is not None:
+        services = [service for service in services if service.get('service_category_id') == service_category_id]
+    if payment_method_id is not None:
+        services = [service for service in services if service.get('payment_method_id') == payment_method_id]
+    if min_price is not None:
+        services = [service for service in services if service.get('price') >= min_price]
+    if max_price is not None:
+        services = [service for service in services if service.get('price') <= max_price]
+
+    # Добавляем к ответу метод оплаты
     for service in services:
-        # Добавляем домен к изображению сервиса
-        if service.picture:
-            service.picture = add_domain_to_picture(request, service.picture)
-        
-        # Добавляем домен к изображению сервиса, если он существует
-        if service.service and service.service.picture:
-            service.service.picture = add_domain_to_picture(request, service.service.picture)
-    
-    # Возвращаем список сервисов
+        payment_method = await get_payment_method(service.get('payment_method_id'))
+        service['payment_method'] = payment_method['method']
+
     return services
+
 
 @router.post('/add',
              summary="Добавление новой услуги.",
              description=services_documentation.add_new_service)
 async def add_new_service(
-    user_id: int = Form(...),
+    uid: str = Depends(get_current_user),
     name: str = Form(...),
     lat: float = Form(...),
     lon: float = Form(...),
     description: str = Form(...),
     price: float = Form(...),
-    owner_id: int = Form(...),
-    date: int = Form(...),
+    currency: str = Form(...),
+    date: int = Form(None),
     email: str = Form(None),
     phone_number: str = Form(None),
     is_store: bool = Form(...),
     picture: UploadFile = File(...),
     service_category_id: int = Form(...),
     payment_method_id: int = Form(None),
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
 ):
-    if not authorization:
-        raise HTTPException(status_code=403, detail="Токен доступа отсутствует")
-
-    # Извлечение токена из заголовка Authorization
-    token = authorization.split(" ")[1] if len(authorization.split(" ")) > 1 else None
-
-    if not token:
-        raise HTTPException(status_code=403, detail="Недействительный токен")
-
-    # Получение user_id из токена
-    try:
-        payload = decode_access_token(token)
-        token_user_id = int(payload['sub'])
-    except HTTPException:
-        raise HTTPException(status_code=403, detail="Недействительный токен")
+    # В uid уже указан id и токен пользователя
     
-    # Проверка, что owner_id из токена совпадает с owner_id из формы
-    if token_user_id != user_id:
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-    
-    # Проверка что пользователь существует и активен
-    user = db.query(User).filter(User.id == token_user_id).first()
-
-    if not user or not user.is_active:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-
     # Проверка существования категории сервиса
-    service_category = db.query(ServicesCategories).filter(ServicesCategories.id == service_category_id).first()
+    service_category = await get_services_categories(id=service_category_id)
     if not service_category:
         raise HTTPException(status_code=404, detail="Категория сервиса не найдена")
 
     # Проверка существования способа оплаты, если указан
     if payment_method_id:
-        payment_method = db.query(PaymentMethod).filter(PaymentMethod.id == payment_method_id).first()
-        if not payment_method:
-            raise HTTPException(status_code=404, detail="Способ оплаты не найден")
+        if not get_payment_method(payment_method_id):
+            raise HTTPException(status_code=404, detail="Такой способа оплаты не найдено.")
 
-    # Путь к папке для сохранения изображений
-    upload_dir = "static/services"
-    if not os.path.exists(upload_dir):
-        os.makedirs(upload_dir)
+    # Генерация уникального идентификатора для нового сервиса
+    service_id = shortuuid.uuid()
 
-    # Генерируем уникальное имя файла
-    file_extension = picture.filename.split(".")[-1]
-    file_name = f"{name}_{owner_id}.{file_extension}"
-    file_path = os.path.join(upload_dir, file_name)
+    def check_id_unice(service_id):
+        # Проверка существования идентификатора в базе данных
+        while db.reference(f'/services/{service_id}').get() is not None:
+            return service_id
+        else:
+            new_service_id = shortuuid.uuid()
+            check_id_unice(new_service_id)
+        
+    service_id = check_id_unice(service_id)
 
-    # Сохраняем файл
-    with open(file_path, "wb") as buffer:
-        buffer.write(await picture.read())
+    # Загрузка картинки в Firebase Storage
+    bucket = storage.bucket()
+    blob = bucket.blob(f'services/{service_id}/{picture.filename}')
+    blob.upload_from_file(picture.file, content_type=picture.content_type)
 
-    # Создаем новый объект service
-    new_service = Service(
-        name=name,
-        lat=lat,
-        lon=lon,
-        rating_count=0,
-        views_count=0,
-        description=description,
-        price=price,
-        owner_id=owner_id,
-        is_active=False,
-        date=date,
-        is_store=is_store,
-        picture=file_name,  # Сохраняем только имя файла без префикса static/
-        service_category_id=service_category_id,
-        payment_method_id=payment_method_id
-    )
+    # Получение публичного URL загруженной картинки
+    picture_url = blob.public_url
 
-    if email is not None:
-        new_service.email = email
-    if phone_number is not None:
-        new_service.phone_number = phone_number
+    # Сохранение информации о новой услуге в базу данных
+    service_data = {
+        'id': service_id,
+        'rating_count': 0,
+        'views_count': 0,
+        'is_active': False,
+        'name': name,
+        'lat': lat,
+        'lon': lon,
+        'description': description,
+        'price': price,
+        'currency':currency,
+        'owner_id': uid,
+        'date': date,
+        'email': email,
+        'phone_number': phone_number,
+        'is_store': is_store,
+        'picture_url': picture_url,
+        'service_category_id': service_category_id,
+        'payment_method_id': payment_method_id,
+        'created_at': datetime.now().isoformat()
+    }
 
-    # Добавляем объект в сессию и сохраняем в базе данных
-    db.add(new_service)
-    db.commit()
-    db.refresh(new_service)
+    # Добавляем новую запись в Firebase Realtime Database
+    db.reference(f'/services/{service_id}').set(service_data)
 
-    # Обновляем токен и устанавливаем его в куки
-    response = JSONResponse(content={"message": "Сервис успешно создан", "service_id": new_service.id})
-    response = update_token(response, token_user_id)
-    
-    return response
+    return {"message": "Услуга успешно добавлена", "service": service_data}
 
-@router.put('/update/{service_id}',
+@router.put('/update',
             summary="Обновление сервиса.",
             description=services_documentation.update_service)
 async def update_service(
-    service_id: int,
-    user_id: int = Form(...),
-    name: str = Form(None),
-    lat: float = Form(None),
-    lon: float = Form(None),
-    description: str = Form(None),
-    price: float = Form(None),
-    date: int = Form(None),
-    picture: bytes = File(None),
-    phone_number: str = File(None),
-    email: str = File(None),
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
+    uid: str = Depends(get_current_user),
+    service_id: str = Form(...),
+    name: Optional[str] = Form(None),
+    lat: Optional[float] = Form(None),
+    lon: Optional[float] = Form(None),
+    description: Optional[str] = Form(None),
+    price: Optional[float] = Form(None),
+    date: Optional[int] = Form(None),
+    picture: Optional[bytes] = File(None),
+    phone_number: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
 ):
-    if not authorization:
-        raise HTTPException(status_code=403, detail="Токен доступа отсутствует")
-
-    # Извлечение токена из заголовка Authorization
-    token = authorization.split(" ")[1] if len(authorization.split(" ")) > 1 else None
-
-    if not token:
-        raise HTTPException(status_code=403, detail="Недействительный токен")
-
-    # Получение user_id из токена
-    try:
-        payload = decode_access_token(token)
-        token_user_id = int(payload['sub'])
-    except HTTPException:
-        raise HTTPException(status_code=403, detail="Недействительный токен")
-    
-    # Проверка, что owner_id из токена совпадает с owner_id из формы
-    if token_user_id != user_id:
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-    
-    # Проверка что пользовватель существует и активен
-    user = db.query(User).filter(User.id == token_user_id).first()
-
-    if not user or not user.is_active:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-
-    # Получаем Сервис для обновления
-    service = db.query(Service).filter(Service.id == service_id).first()
-
+    # Получаем сервис по service_id
+    service = await get_service_by_id(service_id)
     if not service:
-        raise HTTPException(status_code=404, detail="Сервис не найдено")
+        raise HTTPException(status_code=404, detail="Сервис не найден.")
 
-    # Обновляем поля сервиса, если они были переданы
+    # Проверяем, что owner_id сервиса совпадает с uid текущего пользователя
+    if service.get('owner_id') != uid:
+        raise HTTPException(status_code=403, detail="У вас нет прав для обновления этого сервиса.")
+
+    # Обновляем данные сервиса, которые были переданы в запросе
+    updated_data = {}
     if name is not None:
-        service.name = name
+        updated_data['name'] = name
     if lat is not None:
-        service.lat = lat
+        updated_data['lat'] = lat
     if lon is not None:
-        service.lon = lon
+        updated_data['lon'] = lon
     if description is not None:
-        service.description = description
+        updated_data['description'] = description
     if price is not None:
-        service.price = price
+        updated_data['price'] = price
     if date is not None:
-        service.date = date
+        updated_data['date'] = date
     if phone_number is not None:
-        service.phone_number = phone_number
+        updated_data['phone_number'] = phone_number
     if email is not None:
-        service.email = email
+        updated_data['email'] = email
 
-    # Если передано новое изображение, сохраняем его
+    # Если передана картинка, загружаем её в Firebase Storage и обновляем URL картинки
     if picture is not None:
-        upload_dir = "static/services"
-        if not os.path.exists(upload_dir):
-            os.makedirs(upload_dir)
+        bucket = storage.bucket()
+        blob = bucket.blob(f'services/{service_id}/{shortuuid.uuid()}.jpg')
+        blob.upload_from_file(picture, content_type='image/jpeg')
+        updated_data['picture_url'] = blob.public_url
 
-        file_extension = picture.filename.split(".")[-1]
-        file_name = f"{name}_{service.owner_id}.{file_extension}"
-        file_path = os.path.join(upload_dir, file_name)
+    # Обновляем сервис в базе данных
+    await update_service_in_db(service_id, updated_data)
 
-        with open(file_path, "wb") as buffer:
-            buffer.write(picture.file.read())
-
-        service.picture = file_name
-
-    # Сохраняем изменения в базе данных
-    db.commit()
-    db.refresh(service)
-
-    # Обновляем токен и устанавливаем его в куки
-    response = JSONResponse(content={"message": "Сервис успешно обновлено", "service_id": service.id})
-    response = update_token(response, token_user_id)
-    
-    return response
+    return {"message": "Сервис успешно обновлен", "service": {**service, **updated_data}}
 
 
-@router.delete('/delete/{service_id}',
+@router.delete('/delete',
                summary="Удаление сервиса.",
                description=services_documentation.delete_service)
 async def delete_service(
-    service_id: int,
-    user_id: int = Form(...),
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
+    request: Request,
+    uid: str = Depends(get_current_user)
 ):
-    if not authorization:
-        raise HTTPException(status_code=403, detail="Токен доступа отсутствует")
+    service_id = request.service_id
 
-    # Извлечение токена из заголовка Authorization
-    token = authorization.split(" ")[1] if len(authorization.split(" ")) > 1 else None
-
-    if not token:
-        raise HTTPException(status_code=403, detail="Недействительный токен")
-
-    # Получение user_id из токена
-    try:
-        payload = decode_access_token(token)
-        token_user_id = int(payload['sub'])
-    except HTTPException:
-        raise HTTPException(status_code=403, detail="Недействительный токен")
-    
-    # Проверка, что owner_id из токена совпадает с owner_id из формы
-    if token_user_id != user_id:
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-    
-    # Проверка что пользовватель существует и активен
-    user = db.query(User).filter(User.id == token_user_id).first()
-
-    if not user or not user.is_active:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-
-    # Получаем Сервис для удаления
-    service = db.query(Service).filter(Service.id == service_id).first()
-
+    # Получаем сервис по service_id
+    service = await get_service_by_id(service_id)
     if not service:
-        raise HTTPException(status_code=404, detail="Сервис не найдено")
+        raise HTTPException(status_code=404, detail="Сервис не найден.")
 
-    # Удаляем изображение, если оно существует
-    if service.picture:
-        picture_path = os.path.join("static/services", service.picture)
-        if os.path.exists(picture_path):
-            os.remove(picture_path)
+    # Проверяем, что owner_id сервиса совпадает с uid текущего пользователя
+    if service.get('owner_id') != uid:
+        raise HTTPException(status_code=403, detail="У вас нет прав для удаления этого сервиса.")
 
-    # Удаляем Сервис
-    db.delete(service)
-    db.commit()
+    # Удаляем картинки, связанные с услугой
+    picture_url = service.get('picture_url')
+    if picture_url:
+        await delete_picture_from_storage(service_id, picture_url)
 
-    # Обновляем токен и устанавливаем его в куки
-    response = JSONResponse(content={"message": "Сервис успешно удалено", "service_id": service_id})
-    response = update_token(response, token_user_id)
-    
-    return response
+    # Удаляем сервис из базы данных
+    await delete_service_from_db(service_id)
+
+    return {"message": "Сервис успешно удален"}
 
 @router.post('/book_service',
              summary="Бронирование услуги.",
