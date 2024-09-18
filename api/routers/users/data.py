@@ -1,7 +1,7 @@
-import shutil, os
+import shutil, os, shortuuid
 import firebase_conf
 
-from firebase_admin import auth, db
+from firebase_admin import auth, db, storage
 from fastapi import APIRouter, Depends, HTTPException, Request, File, UploadFile, Form, Query, Header
 from sqlalchemy.orm import Session, joinedload
 from starlette.responses import JSONResponse
@@ -15,6 +15,7 @@ from config import BASE_DIR
 from documentation.users import data as user_documentation
 from schemas.user import *
 from utils.user import get_current_user
+from utils.main import delete_picture_from_storage
 
 
 router = APIRouter()
@@ -43,7 +44,10 @@ async def update_last_active(db: db.Reference, uid: str):
 @router.get('/my_data/{uid}', 
              summary="Получение данных пользователя по UID",
              description=user_documentation.get_user_data)
-async def get_my_data(uid: str = Depends(get_current_user)):
+async def get_my_data(
+        uid: str,
+        current_user: dict = Depends(get_current_user),
+    ):
     """
     Получает данные пользователя и обновляет время последней активности.
 
@@ -53,6 +57,8 @@ async def get_my_data(uid: str = Depends(get_current_user)):
     Returns:
         dict: Словарь с данными пользователя.
     """
+    if current_user['uid'] != uid:
+        raise HTTPException(status_code=401, details="Неидентифицированный пользователь.")
 
     try:
         # Получаем данные пользователя из Realtime Database
@@ -74,7 +80,8 @@ async def get_my_data(uid: str = Depends(get_current_user)):
             summary="Обновление данных пользователя",
             description=user_documentation.update_user)
 async def update_user(
-        uid: str = Depends(get_current_user),
+        current_user: dict = Depends(get_current_user),
+        uid: str = Form(...),
         first_name: str = Form(None),
         last_name: str = Form(None),
         username: str = Form(None),
@@ -94,6 +101,8 @@ async def update_user(
     """
 
     try:
+        if current_user['uid'] != uid:
+            raise HTTPException(status_code=401, details="Неидентифицированный пользователь.")
         # Получаем данные пользователя из Realtime Database
         user_ref = db.reference(f"users/{uid}")
         user_data = user_ref.get()
@@ -112,6 +121,19 @@ async def update_user(
         if region_id:
             user_data['region_id'] = region_id
 
+        if avatar:
+            # Если у пользователя была картинка удаляем его
+            if user_data['avatar']:
+               await delete_picture_from_storage(user_data['avatar'])
+            
+            # Сохраняем новую картинку
+            bucket = storage.bucket()
+            # Используем исходное имя файла
+            file_name = avatar.filename
+            blob = bucket.blob(f'users/{uid}/{file_name}')
+            blob.upload_from_file(avatar.file, avatar.content_type)
+            user_data['avatar'] = blob.public_url
+
         # Обновляем время последней активности
         user_data["last_active"] = datetime.now().isoformat()
 
@@ -126,11 +148,14 @@ async def update_user(
                summary="Деактивация (удаление) аккаунта пользователя",
                description=user_documentation.deactivate_user)
 async def deactivate_account(
-        uid: str = Depends(get_current_user),
+        request: Request,
+        current_user: dict = Depends(get_current_user),
     ):
     try:
+        if current_user['uid'] != request.uid:
+            raise HTTPException(status_code=401, details="Неидентифицированный пользователь.")
         # Получить пользователя по UID
-        user = auth.get_user(uid)
+        user = auth.get_user(request.uid)
 
         # Деактивировать пользователя
         user.disabled = True

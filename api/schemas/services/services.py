@@ -49,6 +49,7 @@ class ServiceSchema(BaseModel):
     is_store: bool
     created_at: str
     payment_method: Optional[str] = None
+    working_times: Optional[list] = None
 
 class ServiceCreate(BaseModel):
     name: str = Field(..., description="Название объявления")
@@ -69,7 +70,7 @@ class ServiceCreate(BaseModel):
     payment_method_id: Optional[int] = Field(None, description="ID способа оплаты")
 
 class BookServiceRequest(BaseModel):
-    user_id: int = Field(..., description="ID пользователя, который бронирует услугу")
+    uid: str = Field(..., description="ID пользователя, который бронирует услугу")
     service_id: int = Field(..., description="ID объявления, которое бронируется")
     date: str = Field(..., description="Дата бронирования в формате YYYY-MM-DD")
     time: str = Field(..., description="Время бронирования в формате HH:MM")

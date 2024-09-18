@@ -16,7 +16,8 @@ from utils.files import add_domain_to_picture
 from utils.token import decode_access_token, update_token
 from utils.user import get_current_user
 from utils.services_categories import get_services_categories
-from utils.services import get_payment_method, get_service_by_id, update_service_in_db, delete_service_from_db, delete_picture_from_storage
+from utils.services import get_payment_method, get_service_by_id, update_service_in_db, delete_service_from_db
+from utils.main import delete_picture_from_storage
 
 router = APIRouter()
 
@@ -73,7 +74,8 @@ async def get_services(
              summary="Добавление новой услуги.",
              description=services_documentation.add_new_service)
 async def add_new_service(
-    uid: str = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
+    uid: str = Form(...),
     name: str = Form(...),
     lat: float = Form(...),
     lon: float = Form(...),
@@ -87,8 +89,11 @@ async def add_new_service(
     picture: UploadFile = File(...),
     service_category_id: int = Form(...),
     payment_method_id: int = Form(None),
+    working_times: list = Form(None)
 ):
-    # В uid уже указан id и токен пользователя
+    # Проверка пользователя на авторизованность
+    if uid != current_user['uid']:
+        raise HTTPException(status_code=401, details="Неиндентифицированный пользователь.")
     
     # Проверка существования категории сервиса
     service_category = await get_services_categories(id=service_category_id)
@@ -103,15 +108,13 @@ async def add_new_service(
     # Генерация уникального идентификатора для нового сервиса
     service_id = shortuuid.uuid()
 
-    def check_id_unice(service_id):
+    def check_id_unique(service_id):
         # Проверка существования идентификатора в базе данных
-        while db.reference(f'/services/{service_id}').get() is not None:
-            return service_id
-        else:
-            new_service_id = shortuuid.uuid()
-            check_id_unice(new_service_id)
+        if db.reference(f'/services/{service_id}').get() is not None:
+            return check_id_unique(shortuuid.uuid())
+        return service_id
         
-    service_id = check_id_unice(service_id)
+    service_id = check_id_unique(service_id)
 
     # Загрузка картинки в Firebase Storage
     bucket = storage.bucket()
@@ -120,6 +123,7 @@ async def add_new_service(
 
     # Получение публичного URL загруженной картинки
     picture_url = blob.public_url
+
 
     # Сохранение информации о новой услуге в базу данных
     service_data = {
@@ -144,6 +148,10 @@ async def add_new_service(
         'created_at': datetime.now().isoformat()
     }
 
+    # Если имеются время работы то добавляем их
+    if working_times:
+        service_data['working_times'] = working_times
+
     # Добавляем новую запись в Firebase Realtime Database
     db.reference(f'/services/{service_id}').set(service_data)
 
@@ -153,7 +161,8 @@ async def add_new_service(
             summary="Обновление сервиса.",
             description=services_documentation.update_service)
 async def update_service(
-    uid: str = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
+    uid: str = Form(...),
     service_id: str = Form(...),
     name: Optional[str] = Form(None),
     lat: Optional[float] = Form(None),
@@ -164,6 +173,7 @@ async def update_service(
     picture: Optional[bytes] = File(None),
     phone_number: Optional[str] = Form(None),
     email: Optional[str] = Form(None),
+    working_times: Optional[list] = Form(None)
 ):
     # Получаем сервис по service_id
     service = await get_service_by_id(service_id)
@@ -171,7 +181,7 @@ async def update_service(
         raise HTTPException(status_code=404, detail="Сервис не найден.")
 
     # Проверяем, что owner_id сервиса совпадает с uid текущего пользователя
-    if service.get('owner_id') != uid:
+    if service.get('owner_id') != uid or uid != current_user['uid']:
         raise HTTPException(status_code=403, detail="У вас нет прав для обновления этого сервиса.")
 
     # Обновляем данные сервиса, которые были переданы в запросе
@@ -192,12 +202,17 @@ async def update_service(
         updated_data['phone_number'] = phone_number
     if email is not None:
         updated_data['email'] = email
+    if working_times is not None:
+        updated_data['working_times'] = working_times
 
     # Если передана картинка, загружаем её в Firebase Storage и обновляем URL картинки
     if picture is not None:
+        if updated_data['picture_url']:
+            await delete_picture_from_storage(updated_data['picture_url'])
+
         bucket = storage.bucket()
-        blob = bucket.blob(f'services/{service_id}/{shortuuid.uuid()}.jpg')
-        blob.upload_from_file(picture, content_type='image/jpeg')
+        blob = bucket.blob(f'services/{service_id}/{picture.filename}')
+        blob.upload_from_file(picture, picture.content_type)
         updated_data['picture_url'] = blob.public_url
 
     # Обновляем сервис в базе данных
@@ -211,9 +226,12 @@ async def update_service(
                description=services_documentation.delete_service)
 async def delete_service(
     request: Request,
-    uid: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
 ):
-    service_id = request.service_id
+    
+    request_data = await request.json()
+    uid = request_data.get('uid')
+    service_id = request_data.get('service_id')
 
     # Получаем сервис по service_id
     service = await get_service_by_id(service_id)
@@ -221,13 +239,13 @@ async def delete_service(
         raise HTTPException(status_code=404, detail="Сервис не найден.")
 
     # Проверяем, что owner_id сервиса совпадает с uid текущего пользователя
-    if service.get('owner_id') != uid:
+    if service.get('owner_id') != uid or uid != current_user['uid']:
         raise HTTPException(status_code=403, detail="У вас нет прав для удаления этого сервиса.")
 
     # Удаляем картинки, связанные с услугой
     picture_url = service.get('picture_url')
     if picture_url:
-        await delete_picture_from_storage(service_id, picture_url)
+        await delete_picture_from_storage(picture_url)
 
     # Удаляем сервис из базы данных
     await delete_service_from_db(service_id)
@@ -238,57 +256,43 @@ async def delete_service(
              summary="Бронирование услуги.",
              description=services_documentation.book_service)
 async def book_service(
-    booking_data: BookServiceRequest,
-    db: Session = Depends(get_db),
-    authorization: str = Header(None)
-):
-    if not authorization:
-        raise HTTPException(status_code=403, detail="Токен доступа отсутствует")
-
-    # Извлечение токена из заголовка Authorization
-    token = authorization.split(" ")[1] if len(authorization.split(" ")) > 1 else None
-
-    if not token:
-        raise HTTPException(status_code=403, detail="Недействительный токен")
-
-    # Получение user_id из токена
-    try:
-        payload = decode_access_token(token)
-        token_user_id = int(payload['sub'])
-    except HTTPException:
-        raise HTTPException(status_code=403, detail="Недействительный токен")
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):  
+    request_data = await request.json()
+    uid = request_data.get('uid')
+    service_id = request_data.get('service_id')
+    date = request_data.get('date')
+    time = request_data.get('time')
     
-    # Проверка, что user_id из токена совпадает с user_id из запроса
-    if token_user_id != booking_data.user_id:
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-    
-    # Проверка что пользовватель существует и активен
-    user = db.query(User).filter(User.id == token_user_id).first()
+    if current_user['uid'] != uid:
+        raise HTTPException(status_code=401, details="Неиндентифицированный пользователь.")
 
-    if not user or not user.is_active:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    # Проверяем чтобы пользователь не был владельцем объявления
+    if db.reference(f'/services/{service_id}').get()['owner_id'] == uid:
+        raise HTTPException(status_code=401, details="Владелец не может забронировать.")
 
-    # Проверка что Сервис существует
-    service = db.query(Service).filter(Service.id == booking_data.service_id).first()
+    # Генерация индетфикатора
+    booking_id = shortuuid.uuid()
 
-    if not service:
-        raise HTTPException(status_code=404, detail="Сервис не найдено")
+    def check_id_unique(booking_id):
+        # Проверка существования идентификатора в базе данных
+        if db.reference(f'/booking_services/{booking_id}').get() is not None:
+            return check_id_unique(shortuuid.uuid())
+        return booking_id
+        
+    booking_id = check_id_unique(booking_id)
 
-    # Создаем новую бронь
-    new_booking = BookedService(
-        user_id=booking_data.user_id,
-        service_id=booking_data.service_id,
-        date=booking_data.date,
-        time=booking_data.time
-    )
+    # Сохранение информации о новой услуге в базу данных
+    booking_data = {
+        'id': booking_id,
+        'user_id': uid,
+        'service_id': service_id,
+        'date': date,
+        'tile': time
+    }
 
-    # Добавляем бронь в сессию и сохраняем в базе данных
-    db.add(new_booking)
-    db.commit()
-    db.refresh(new_booking)
+    # Добавляем новую запись в Firebase Realtime Database
+    db.reference(f'/booking_services/{booking_id}').set(booking_data)
 
-    # Обновляем токен и устанавливаем его в куки
-    response = JSONResponse(content={"message": "Услуга успешно забронирована", "booking_id": new_booking.id})
-    response = update_token(response, token_user_id)
-    
-    return response
+    return {"message": "Услуга успешно забронирована", "booking": booking_data}

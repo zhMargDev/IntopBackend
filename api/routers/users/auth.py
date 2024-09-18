@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-from firebase_admin import auth, db
+from firebase_admin import auth, db, credentials, messaging
 from firebase_admin.exceptions import FirebaseError
 
 from database import get_db
@@ -14,6 +14,7 @@ from schemas.user import *
 from utils.token import decode_access_token, update_token
 from schemas.sms import *
 from documentation.users import auth as authorization_documentation
+from utils.user import get_current_user
 
 router = APIRouter()
 
@@ -36,6 +37,9 @@ class PhoneVerification(BaseModel):
     phone_number: str
     code: str
 
+@router.get("/protected")
+async def protected_route(current_user: dict = Depends(get_current_user)):
+    return {"message": "This is a protected route", "user": current_user}
 
 @router.post("/register_with_email",
              summary="Регистрация через email.",

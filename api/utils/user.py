@@ -1,24 +1,27 @@
-from fastapi import HTTPException, Header
+import firebase_conf
+
+from fastapi import HTTPException, Header, Depends, status
+from firebase_admin import auth, credentials
+from fastapi.security import OAuth2PasswordBearer
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Функция для получения текущего пользователя на основе токена авторизации
-def get_current_user(authorization: str = Header(None)):
-    # Проверка, что заголовок авторизации передан
-    if not authorization:
-        # Если заголовок не передан, выбрасываем ошибку с кодом 401 (Unauthorized)
-        raise HTTPException(status_code=401, detail="Authorization header is missing")
-
+def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
-        # Извлекаем токен из заголовка "Authorization". Ожидается, что он передан в формате "Bearer <id_token>"
-        id_token = authorization.split(" ")[1]
-        
-        # Используем Firebase Admin SDK для проверки и декодирования токена
-        decoded_token = auth.verify_id_token(id_token)
-        
-        # Получаем уникальный идентификатор пользователя (uid) из декодированного токена
-        uid = decoded_token["uid"]
-        
-        # Возвращаем uid (идентификатор пользователя)
-        return uid
+        # Проверка токена Firebase
+        decoded_token = auth.verify_id_token(token)
+        uid = decoded_token.get("uid")
+        if not uid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return {"uid": uid}
     except Exception as e:
-        # Если что-то пошло не так (например, неверный токен), выбрасываем ошибку с кодом 401 и соответствующим сообщением
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
+        )

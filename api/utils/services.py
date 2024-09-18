@@ -30,8 +30,3 @@ async def delete_service_from_db(service_id: str):
     ref = db.reference(f'/services/{service_id}')
     ref.delete()
 
-# Пример функции для удаления картинки из Firebase Storage
-async def delete_picture_from_storage(service_id: str, picture_url: str):
-    bucket = storage.bucket()
-    blob = bucket.blob(picture_url.split('/')[-1])
-    blob.delete()
