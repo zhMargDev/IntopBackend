@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request, File, UploadFile
 from sqlalchemy.orm import Session, joinedload
 from starlette.responses import JSONResponse
 from datetime import datetime
-from geopy.geocoders import Nominatim
 
 from database import get_db
 from models.models import User
@@ -222,15 +221,3 @@ async def get_users_by_filters(
 
     return users
 
-@router.get("/get_location_name",
-            summary="Возвращает локацию пользователя.")
-def get_location_name(latitude: float = Query(..., description="Широта"),
-                      longitude: float = Query(..., description="Долгота"),
-                      language: str = Query('en', description="Языковой код")):
-    geolocator = Nominatim(user_agent="geoapiExercises")
-    location = geolocator.reverse((latitude, longitude), language=language)
-
-    if location:
-        return {"location_name": location.address}
-    else:
-        return {"location_name": "Location not found"}

@@ -74,7 +74,9 @@ async def test():
     verification_id = send_verification_code('nj.dark.soul@gmail.com')
     return verification_id
 
-@router.get("/protected")
+@router.get("/protected",
+            summary="Проверка пользователя на аутентификацию",
+            description=authorization_documentation.protected_line)
 async def protected_route(current_user: dict = Depends(get_current_user)):
     return {"message": "This is a protected route", "user": current_user}
 
