@@ -38,8 +38,8 @@ async def get_services_by_filters(
         if (
             (filters.category_id is None or service_data["service_category_id"] == filters.category_id) and
             (filters.payment_method_id is None or service_data["payment_method_id"] == filters.payment_method_id) and
-            (filters.min_price is None or service_data["price"] >= filters.min_price) and
-            (filters.max_price is None or service_data["price"] <= filters.max_price)
+            (filters.minPrice is None or service_data["price"] >= filters.minPrice) and
+            (filters.maxPrice is None or service_data["price"] <= filters.maxPrice)
         ):
             filtered_services.append(service_data)
 
@@ -50,12 +50,7 @@ async def get_services_by_filters(
              description=services_documentation.get_all,
              response_model=List[ServiceSchema])
 async def get_services(
-        id: Optional[str] = Query(None, description="ID сервиса для фильтрации"),
-        service_category_id: Optional[int] = Query(None, description="ID сервиса для фильтрации"),
-        min_price: Optional[float] = Query(None, description="Минимальная цена для фильтрации"),
-        max_price: Optional[float] = Query(None, description="Максимальная цена для фильтрации"),
-        payment_method_id: Optional[int] = Query(None, description="Метод оплаты для фильтрации")
-    ):
+        id: Optional[str] = Query(None, description="ID сервиса для фильтрации")):
     # Если указан id, находим и возвращаем услугу по id
     if id is not None:
         ref = db.reference(f'/services/{id}')
@@ -76,23 +71,7 @@ async def get_services(
     # Преобразуем данные в список
     services = list(data.values())
 
-    # Применяем фильтры
-    if service_category_id is not None:
-        services = [service for service in services if service.get('service_category_id') == service_category_id]
-    if payment_method_id is not None:
-        services = [service for service in services if service.get('payment_method_id') == payment_method_id]
-    if min_price is not None:
-        services = [service for service in services if service.get('price') >= min_price]
-    if max_price is not None:
-        services = [service for service in services if service.get('price') <= max_price]
-
-    # Добавляем к ответу метод оплаты
-    for service in services:
-        payment_method = await get_payment_method(service.get('payment_method_id'))
-        service['payment_method'] = payment_method['method']
-
     return services
-
 
 @router.post('/add',
              summary="Добавление новой услуги.",
