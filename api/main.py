@@ -1,6 +1,6 @@
 import os
 
-from fastapi import FastAPI, Response, HTTPException
+from fastapi import FastAPI, Response, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
@@ -12,6 +12,7 @@ from routers.categories.data import router as categories_router
 from routers.stores.data import router as store_router
 from routers.services.services_categories import router as services_categories_router
 from routers.services.services import router as services_router
+from routers.services.payment_methods import router as payment_methods_router
 
 app = FastAPI()
 
@@ -31,10 +32,15 @@ app.add_middleware(
     allow_headers=["*"],  # Позволяет все заголовки
 )
 
-@app.get("/", tags=["Основная"], 
+@app.get("/", tags=["Основная"],
          summary="Основная информация для перехода в документацию.")
-def read_item():
-    return {"data": "Documentation is available at /docs"}
+def read_item(request: Request):
+    base_url = request.base_url
+    docs_url = f"{base_url}docs"
+    return {
+        "data": "Documentation is available at /docs",
+        "link": docs_url
+    }
 
 @app.get("/file/{folder}/{filename}",
          tags=["Получение картинок."],
@@ -68,3 +74,5 @@ app.include_router(store_router, prefix="/stores", tags=["Магазины и к
 app.include_router(services_categories_router, prefix="/services_categories", tags=["Категории Сервисов"])
 # Объявления сервисов
 app.include_router(services_router, prefix="/services", tags=["Сервисы"])
+# Объявления способов оплаты
+app.include_router(payment_methods_router, prefix="/payment_methods", tags=["Способы оплаты"])

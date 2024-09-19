@@ -8,6 +8,7 @@ from starlette.responses import JSONResponse
 from datetime import datetime
 from typing import List, Optional
 
+from firebase_conf import firebase
 from documentation.services import services as services_documentation
 from database import get_db
 from models.models import Service, User, BookedService, ServicesCategories, PaymentMethod
@@ -20,6 +21,29 @@ from utils.services import get_payment_method, get_service_by_id, update_service
 from utils.main import delete_picture_from_storage
 
 router = APIRouter()
+
+@router.get('/by_filters',
+            summary="Получение услуг по фильтрам.",
+            description=services_documentation.get_services_by_filters)
+async def get_services_by_filters(
+    filters: ServicesGetByFilters = Depends()
+):
+    py_db = firebase.database()
+    # Получаем услуги
+    services_ref = py_db.child("services").get()
+    services = services_ref.val() or {}
+
+    filtered_services = []
+    for service_id, service_data in services.items():
+        if (
+            (filters.category_id is None or service_data["service_category_id"] == filters.category_id) and
+            (filters.payment_method_id is None or service_data["payment_method_id"] == filters.payment_method_id) and
+            (filters.min_price is None or service_data["price"] >= filters.min_price) and
+            (filters.max_price is None or service_data["price"] <= filters.max_price)
+        ):
+            filtered_services.append(service_data)
+
+    return filtered_services
 
 @router.get("/all", 
              summary="Получение всех сервисов или конкретного сервиса по id",

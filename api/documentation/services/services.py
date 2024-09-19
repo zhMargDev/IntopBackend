@@ -51,6 +51,59 @@ get_all = """
 ```
 """
 
+get_services_by_filters = """
+Этот эндпоинт позволяет пользователю получить услуги с применением различных фильтров.
+
+**Как можно отправить запрос**:
+- `GET /services/get_services_by_filters`
+
+**Какие параметры можно указать**:
+- `category_id`: (необязательный) ID категории услуги.
+- `payment_method_id`: (необязательный) ID метода оплаты.
+- `minPrice`: (необязательный) Минимальная цена услуги.
+- `maxPrice`: (необязательный) Максимальная цена услуги.
+
+**Пример запроса**:
+```bash
+curl -X GET "http://localhost:8000/services/get_services_by_filters" \
+-H "Authorization: Bearer your_jwt_token" \
+-H "Content-Type: application/json" \
+-d '{
+    "category_id": 1,
+    "payment_method_id": 2,
+    "minPrice": 100,
+    "maxPrice": 500
+}'
+```
+**Пример ответа:**
+```
+{
+    "services": [
+        {
+            "id": 1,
+            "name": "Услуга 1",
+            "price": 200,
+            "service_category_id": 1,
+            "payment_method_id": 2
+        },
+        {
+            "id": 2,
+            "name": "Услуга 2",
+            "price": 300,
+            "service_category_id": 1,
+            "payment_method_id": 2
+        }
+    ]
+}
+```
+**Ответы:**
+```
+-` 200 OK: Успешный запрос, услуги успешно получены.
+-` 403 Forbidden: Токен доступа отсутствует или недействителен, или у пользователя недостаточно прав.
+-` 404 Not Found: Услуги не найдены.
+
+"""
+
 add_new_service = """
 Этот эндпоинт позволяет добавить новую услугу.
 

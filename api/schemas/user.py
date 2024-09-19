@@ -4,6 +4,9 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from typing import List, Optional
 from datetime import datetime
 
+class PhoneVerificationRequest(BaseModel):
+    phone_number: str
+    
 class EmailRegistration(BaseModel):
     email: str
     password: str

@@ -17,6 +17,15 @@ class PaymentMethodSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class ServicesGetByFilters(BaseModel):
+    category_id: Optional[int] = None
+    minPrice: Optional[int] = None
+    maxPrice: Optional[int] = None
+    payment_method_id: Optional[int] = None
+    lat: Optional[int] = None
+    lon: Optional[int] = None
+    distance: Optional[int] = None
+
 class ServiceWorkTimesSchema(BaseModel):
     id: int
     service_id: int

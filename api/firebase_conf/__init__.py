@@ -19,4 +19,6 @@ firebase_config = {
     "appId": "1:1056920316512:web:421b3c7b282a2180807105"
 }
 
+FIREBASE_API_KEY = "AIzaSyBqHuFSr0muVsePoaxgkBU0_y6HkXdY6OY"
+
 firebase = pyrebase.initialize_app(firebase_config)

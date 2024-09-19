@@ -23,5 +23,4 @@ async def get_services_categories(id: Optional[int] = None):
             raise HTTPException(status_code=404, detail="Категорий для услуг по указанному id не найдено.")
         else:
             return [category]
-
     return services_categories_snapshot

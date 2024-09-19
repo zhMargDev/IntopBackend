@@ -1,5 +1,6 @@
 import firebase_admin
 import uuid
+import requests
 
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Request, status
@@ -9,7 +10,7 @@ from passlib.context import CryptContext
 from firebase_admin import auth, db, credentials, messaging
 from firebase_admin.exceptions import FirebaseError
 
-from firebase_conf import firebase
+from firebase_conf import firebase, FIREBASE_API_KEY
 from database import get_db
 from models.models import User, Role
 from schemas.user import *
@@ -99,7 +100,6 @@ async def register_with_email(data: User):
         # Сохранение всех данных в Realtime Database
         db.reference("users").child(user.uid).set(user_data_dict)
 
-
         # Получение экземпляра аутентификации
         py_auth = firebase.auth()
 
@@ -119,6 +119,29 @@ async def register_with_email(data: User):
     except FirebaseError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
+@router.post("/send_phone_verification_code",
+             summary="Отправка кода подтверждения на номер телефона.",
+             description=authorization_documentation.send_phone_verification_code)
+async def send_phone_verification_code(data: PhoneVerificationRequest):
+    try:
+        # Отправка кода подтверждения на номер телефона
+        phone_number = data.phone_number
+        url = f"https://identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key={FIREBASE_API_KEY}"
+        payload = {
+            "phoneNumber": phone_number,
+            "recaptchaToken": "YOUR_RECAPTCHA_TOKEN"  # Замените на реальный токен reCAPTCHA
+        }
+        response = requests.post(url, json=payload)
+
+        if response.status_code == 200:
+            verification_id = response.json().get("sessionInfo")
+            return {"message": "Код подтверждения отправлен на указанный номер телефона.", "verification_id": verification_id}
+        else:
+            raise HTTPException(status_code=response.status_code, detail=response.json())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
 @router.post("/register_with_phone",
              summary="Регистрация через номер телефона.",
              description=authorization_documentation.register_with_email_description)
@@ -138,9 +161,6 @@ async def register_with_phone(data: User):
         user_data_dict = data.dict(exclude={"password"})  # Исключаем пароль из данных для записи
         user_data_dict["uid"] = user.uid
 
-
-        # Генерация кода подтверждения и отправка SMS
-        #verification_id = auth.generate_verification_id(phone_number=data.phone_number)
         # Сохранение всех данных в Realtime Database
         db.reference("users").child(user.uid).set(user_data_dict)
 
