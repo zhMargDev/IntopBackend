@@ -35,11 +35,19 @@ def verify_password(plain_password, hashed_password):
 
 @router.get("/protected",
             summary="Проверка пользователя на аутентификацию",
-            description=authorization_documentation.protected_line)
+            description="Описание защищенного маршрута")
 async def protected_route(current_user: dict = Depends(get_current_user)):
-    # Refresh user last active
+    # Получаем ссылку на узел пользователей
+    ref = db.reference(f'users/{current_user["uid"]}')
+    user_data = ref.get()
+
+    if not user_data:
+        raise HTTPException(status_code=404, detail="Пользователь не найден.")
+
+    # Обновляем последнюю активность пользователя
     await update_last_active(uid=current_user["uid"])
-    return {"message": "This is a protected route", "user": current_user}
+
+    return {"message": "This is a protected route", "user": user_data}
 
 @router.post("/logout", 
              summary="Выход из аккаунта", 
@@ -171,7 +179,7 @@ async def login_with_email(data: EmailRegistration, response: Response):
             raise HTTPException(status_code=403, detail="Пользователь не верифицирован. Пожалуйста, проверьте вашу почту для подтверждения.")
 
         # Установка токена в куки
-        response = JSONResponse(content={"message": "Пользователь авторизован.", "user_id": user.uid, "jwtToken": id_token})
+        response = JSONResponse(content={"message": "Пользователь авторизован.", "user": user.uid, "jwtToken": id_token})
 
         return response
     except FirebaseError as e:
