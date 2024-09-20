@@ -18,13 +18,26 @@ class PaymentMethodSchema(BaseModel):
         from_attributes = True
 
 class ServicesGetByFilters(BaseModel):
-    category_id: Optional[int] = None
-    minPrice: Optional[int] = None
-    maxPrice: Optional[int] = None
-    payment_method_id: Optional[int] = None
-    lat: Optional[int] = None
-    lon: Optional[int] = None
-    distance: Optional[int] = None
+    category_id: Optional[str] = None
+    minPrice: Optional[str] = None
+    maxPrice: Optional[str] = None
+    payment_method_id: Optional[str] = None
+    lat: Optional[str] = None
+    lon: Optional[str] = None
+    distance: Optional[str] = None
+
+    def to_int_fields(self):
+        # Преобразование полей в целые числа, если они не None и могут быть преобразованы
+        self.category_id = int(self.category_id) if self.category_id and self.category_id != 'null' and self.category_id.isdigit() else None
+        self.minPrice = int(self.minPrice) if self.minPrice and self.minPrice != 'null' and self.minPrice.isdigit() else None
+        self.maxPrice = int(self.maxPrice) if self.maxPrice and self.maxPrice != 'null' and self.maxPrice.isdigit() else None
+        self.payment_method_id = int(self.payment_method_id) if self.payment_method_id and self.payment_method_id != 'null' and self.payment_method_id.isdigit() else None
+        self.distance = int(self.distance) if self.distance and self.distance != 'null' and self.distance.isdigit() else None
+
+        # Преобразование полей в числа с плавающей точкой, если они не None и могут быть преобразованы
+        self.lat = float(self.lat) if self.lat and self.lat != 'null' and self.lat.replace('.', '', 1).isdigit() else None
+        self.lon = float(self.lon) if self.lon and self.lon != 'null' and self.lon.replace('.', '', 1).isdigit() else None
+
 
 class ServiceWorkTimesSchema(BaseModel):
     id: int

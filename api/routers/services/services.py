@@ -28,10 +28,13 @@ router = APIRouter()
 async def get_services_by_filters(
     filters: ServicesGetByFilters = Depends()
 ):
+    filters.to_int_fields()
     py_db = firebase.database()
     # Получаем услуги
     services_ref = py_db.child("services").get()
     services = services_ref.val() or {}
+
+    print(type(filters.maxPrice))
 
     filtered_services = []
     for service_id, service_data in services.items():
