@@ -2,6 +2,7 @@
 fastapi
 uvicorn[standard]
 firebase-admin
+pyrobase
 
 # SQLAlchemy and database drivers
 sqlalchemy
