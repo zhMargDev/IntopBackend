@@ -14,32 +14,11 @@ from utils.token import decode_access_token, update_token
 from config import BASE_DIR
 from documentation.users import data as user_documentation
 from schemas.user import *
-from utils.user import get_current_user
+from utils.user import get_current_user, update_last_active
 from utils.main import delete_picture_from_storage
 
 
 router = APIRouter()
-
-async def update_last_active(db: db.Reference, uid: str):
-    """
-    Обновляет поле last_active для пользователя по UID.
-
-    Args:
-        db: Ссылка на корневой узел базы данных Firebase.
-        uid: UID пользователя.
-    """
-
-    # Получение ссылки на узел пользователя по UID
-    user_ref = db.child(f"users/{uid}")
-
-    # Словарь с новыми данными
-    new_data = {"last_active": datetime.now().isoformat()}
-
-    # Обновление данных пользователя
-    user_ref.update(new_data)
-
-
-
 
 @router.get('/my_data/{uid}', 
              summary="Получение данных пользователя по UID",

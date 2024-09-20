@@ -21,9 +21,11 @@ app = FastAPI()
 origins = [
     "https://intop.uz",
     "http://localhost",
-    "http://localhost:8000",  # Порт по умолчанию для FastAPI
-    "http://localhost:8080",  # Порт по умолчанию для Vue js
+    "http://127.0.0.1:8000",  # Порт по умолчанию для FastAPI
+    "http://localhost:8080",
+    "http://localhost:8080/"  # Порт по умолчанию для Vue js
 ]
+
 
 app.add_middleware(
     CORSMiddleware,

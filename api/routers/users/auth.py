@@ -3,7 +3,7 @@ import uuid
 import requests
 
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, Request, status
+from fastapi import APIRouter, HTTPException, Depends, Request, status, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
@@ -15,6 +15,7 @@ from database import get_db
 from models.models import User, Role
 from schemas.user import *
 from utils.token import decode_access_token, update_token
+from utils.user import update_last_active
 from schemas.sms import *
 from documentation.users import auth as authorization_documentation
 from utils.user import get_current_user
@@ -32,53 +33,34 @@ def verify_password(plain_password, hashed_password):
     # Проверка 2х паролей с хешированием
     return pwd_context.verify(plain_password, hashed_password)
 
-
-
-def send_verification_code(registration_token, code):
-    message = messaging.Message(
-        notification=messaging.Notification(
-            title="Код подтверждения",
-            body="Ваш код: " + code
-        ),
-        data={
-            "code": code
-        },
-        token=registration_token
-    )
-
-    # Send a message to the device corresponding to the provided
-    # registration token.
-    response = messaging.send(message)  
-
-    print('Successfully sent message:', response)
-    
-def send_verification_code(phone_number):
-    verification_id = None
-    try:
-        verification_id = auth.generate_email_verification_link(phone_number)
-        print(verification_id)
-    except FirebaseError as e:
-        print(e)
-    return verification_id
-
-def verify_phone_number(verification_id, verification_code):
-    try:
-        phone_auth = auth.PhoneAuthProvider.get_credential(verification_id, verification_code)
-        user = auth.sign_in_with_credential(phone_auth)
-        print('Пользователь успешно авторизован:', user.uid)
-    except auth.exceptions.FirebaseAuthException as e:
-        print(e)
-
-@router.get('/test')
-async def test():
-    verification_id = send_verification_code('nj.dark.soul@gmail.com')
-    return verification_id
-
 @router.get("/protected",
             summary="Проверка пользователя на аутентификацию",
             description=authorization_documentation.protected_line)
 async def protected_route(current_user: dict = Depends(get_current_user)):
+    # Refresh user last active
+    await update_last_active(uid=current_user["uid"])
     return {"message": "This is a protected route", "user": current_user}
+
+@router.post("/logout", 
+             summary="Выход из аккаунта", 
+             description="Эндпоинт для выхода из аккаунта, получает токен из заголовка, проверяет на действительность, выходит из аккаунта в firebase и удаляет токен из заголовка.")
+async def logout(response: Response, 
+                 current_user: dict = Depends(get_current_user)):
+    try:
+        uid = current_user.get("uid")
+        if not uid:
+            raise HTTPException(status_code=401, detail="Неверный токен")
+
+        # Выполнение выхода из аккаунта в Firebase
+        auth.revoke_refresh_tokens(uid)
+
+        # Удаление токена из куки
+        response = JSONResponse(content={"message": "Вы успешно вышли из аккаунта"})
+        response.delete_cookie(key="token")
+
+        return response
+    except Exception as e:
+        return JSONResponse(content={"message": "Ошибка при выходе из аккаунта", "error": str(e)}, status_code=500)
 
 @router.post("/register_with_email",
              summary="Регистрация через email.",
@@ -167,33 +149,56 @@ async def register_with_phone(data: User):
         db.reference("users").child(user.uid).set(user_data_dict)
 
         # Возврат сообщения об успешной регистрации
-        return {"message": "Код подтверждения отправлен на ваш номер телефона. Проверьте SMS."}
+        #return {"message": "Код подтверждения отправлен на ваш номер телефона. Проверьте SMS."}
+        return {"message": "Для верификации аккаунта нужно зарегестрировать эл. почту в личном кабинете."}
     except FirebaseError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/login_with_email", 
+@router.post("/login_with_email",
              summary="Вход через email.",
              description=authorization_documentation.login_with_email_description)
-async def login_with_email(data: EmailRegistration):
+async def login_with_email(data: EmailRegistration, response: Response):
     try:
+        py_auth = firebase.auth()
+        # Выполнение входа пользователя для получения токена
+        user_credentials = py_auth.sign_in_with_email_and_password(data.email, data.password)
+        id_token = user_credentials['idToken']
+
         # Получение пользователя по email
         user = auth.get_user_by_email(data.email)
-        # Здесь можно добавить логику для проверки пароля (обычно это делается на клиенте)
+
         if not user.email_verified:
             raise HTTPException(status_code=403, detail="Пользователь не верифицирован. Пожалуйста, проверьте вашу почту для подтверждения.")
-        return {"message": "Пользователь авторизован.", "user_id": user.uid}
+
+        # Установка токена в куки
+        response = JSONResponse(content={"message": "Пользователь авторизован.", "user_id": user.uid, "jwtToken": id_token})
+
+        return response
     except FirebaseError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-@router.post("/login_with_phone_number", 
-             summary="Вход через email.",
+    
+@router.post("/login_with_phone_number",
+             summary="Вход через номер телефона.",
              description=authorization_documentation.login_with_phone_number_description)
-async def login_with_phone_number(data: PhoneVerification):
+async def login_with_phone_number(data: PhoneVerification, response: Response):
     try:
-        # Получение пользователя по email
+        py_auth = firebase.auth()
+        # Выполнение входа пользователя для получения токена
+        user_credentials = py_auth.sign_in_with_phone_number(data.phone_number, data.verification_code)
+        id_token = user_credentials['idToken']
+
+        # Получение пользователя по номеру телефона
         user = auth.get_user_by_phone_number(data.phone_number)
-        # Здесь можно добавить логику для проверки пароля (обычно это делается на клиенте)
-        return {"message": "Пользователь авторизован.", "user_id": user.uid}
+
+        #if not user.phone_number_verified:
+        #    raise HTTPException(status_code=403, detail="Номер телефона не верифицирован. Пожалуйста, проверьте ваш телефон для подтверждения.")
+
+        # Установка токена в куки
+        response = JSONResponse(content={"message": "Пользователь авторизован.", "user_id": user.uid, "jwtToken": id_token})
+
+        #response.set_cookie(key="token", value=id_token, httponly=True, secure=True, samesite="Lax")
+
+        return response
     except FirebaseError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
