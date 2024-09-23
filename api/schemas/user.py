@@ -4,17 +4,21 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from typing import List, Optional
 from datetime import datetime
 
+
 class PhoneVerificationRequest(BaseModel):
     phone_number: str
-    
+
+
 class EmailRegistration(BaseModel):
     email: str
     password: str
+
 
 class PhoneVerification(BaseModel):
     phone_number: str
     code: Optional[str] = None
     password: str
+
 
 class User(BaseModel):
     uid: Optional[str] = None
@@ -35,17 +39,30 @@ class User(BaseModel):
     verification_id: Optional[str] = None
     verification_code: Optional[str] = None
 
+
+class GoogleAccountUser(BaseModel):
+    username: str
+    email: str
+    uid: str
+    avatar: str
+    role: Optional[str] = None
+
 # Pydantic модель для получения данных
+
+
 class TelegramInitData(BaseModel):
     id: int
     first_name: str
     last_name: str
     username: str
 
+
 class RatingCreate(BaseModel):
     rater_id: int
     rated_id: int
-    rating: float = Field(..., gt=0, lt=6)  # Предполагаем, что рейтинг от 1 до 5
+    # Предполагаем, что рейтинг от 1 до 5
+    rating: float = Field(..., gt=0, lt=6)
+
 
 class UserGetByFilters(BaseModel):
     uid: Optional[str] = None
@@ -56,6 +73,7 @@ class UserGetByFilters(BaseModel):
     phone_number: Optional[str] = None
     email: Optional[str] = None
     region_id: Optional[int] = None
+
 
 class UserResponse(BaseModel):
     id: int
@@ -75,7 +93,8 @@ class UserResponse(BaseModel):
     last_active: str
 
     class Config:
-        from_attributes=True
+        from_attributes = True
+
 
 class EmailRegistrationRequest(BaseModel):
     email: EmailStr
@@ -89,15 +108,19 @@ class EmailRegistrationRequest(BaseModel):
         if len(v) < 8:
             raise ValueError('Пароль должен быть длиной не менее 8 символов')
         if not re.search(r'[A-Z]', v):
-            raise ValueError('Пароль должен содержать хотя бы одну заглавную букву')
+            raise ValueError(
+                'Пароль должен содержать хотя бы одну заглавную букву')
         if not re.search(r'[a-z]', v):
-            raise ValueError('Пароль должен содержать хотя бы одну строчную букву')
+            raise ValueError(
+                'Пароль должен содержать хотя бы одну строчную букву')
         if not re.search(r'[0-9]', v):
             raise ValueError('Пароль должен содержать хотя бы одну цифру')
         if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
-            raise ValueError('Пароль должен содержать хотя бы один специальный символ')
+            raise ValueError(
+                'Пароль должен содержать хотя бы один специальный символ')
         return v
-    
+
+
 class EmailLoginRequest(BaseModel):
     email: EmailStr = Field(..., description="Электронная почта пользователя")
     password: str = Field(..., min_length=8, description="Пароль пользователя")
@@ -109,6 +132,7 @@ class EmailLoginRequest(BaseModel):
                 "password": "Testing123!"
             }
         }
+
 
 class EmailSMSRequest(BaseModel):
     email: EmailStr = Field(..., description="Электронная почта пользователя")

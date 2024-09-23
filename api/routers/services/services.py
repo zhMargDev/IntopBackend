@@ -1,4 +1,5 @@
-import os, shortuuid
+import os
+import shortuuid
 import firebase_conf
 
 from firebase_admin import auth, db, storage
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from starlette.responses import JSONResponse
 from datetime import datetime
 from typing import List, Optional
+from geopy.distance import geodesic
 
 from firebase_conf import firebase
 from documentation.services import services as services_documentation
@@ -22,6 +24,29 @@ from utils.main import delete_picture_from_storage
 
 router = APIRouter()
 
+
+async def calculate_distance(lat1, lon1, lat2, lon2):
+    """
+    Рассчитывает расстояние между двумя географическими точками в километрах.
+
+    Args:
+        lat1 (float): Широта первой точки.
+        lon1 (float): Долгота первой точки.
+        lat2 (float): Широта второй точки.
+        lon2 (float): Долгота второй точки.
+
+    Returns:
+        float: Расстояние между точками в километрах.
+    """
+
+    # Создаем координаты точек
+    coords_1 = (lat1, lon1)
+    coords_2 = (lat2, lon2)
+
+    # Рассчитываем расстояние по большой окружности
+    return geodesic(coords_1, coords_2).kilometers
+
+
 @router.get('/by_filters',
             summary="Получение услуг по фильтрам.",
             description=services_documentation.get_services_by_filters)
@@ -34,24 +59,30 @@ async def get_services_by_filters(
     services_ref = py_db.child("services").get()
     services = services_ref.val() or {}
 
-    print(type(filters.maxPrice))
-
     filtered_services = []
     for service_id, service_data in services.items():
         if (
             (filters.category_id is None or service_data["service_category_id"] == filters.category_id) and
             (filters.payment_method_id is None or service_data["payment_method_id"] == filters.payment_method_id) and
             (filters.minPrice is None or service_data["price"] >= filters.minPrice) and
-            (filters.maxPrice is None or service_data["price"] <= filters.maxPrice)
+            (filters.maxPrice is None or service_data["price"]
+             <= filters.maxPrice) and
+            (filters.lat is not None and filters.lon is not None and filters.distance is not None)
         ):
-            filtered_services.append(service_data)
+            service_lat = service_data["lat"]
+            service_lon = service_data["lon"]
+            distance_km = calculate_distance(
+                filters.lat, filters.lon, service_lat, service_lon)
+            if distance_km <= filters.distance:
+                filtered_services.append(service_data)
 
     return filtered_services
 
-@router.get("/all", 
-             summary="Получение всех сервисов или конкретного сервиса по id",
-             description=services_documentation.get_all,
-             response_model=List[ServiceSchema])
+
+@router.get("/all",
+            summary="Получение всех сервисов или конкретного сервиса по id",
+            description=services_documentation.get_all,
+            response_model=List[ServiceSchema])
 async def get_services(
         id: Optional[str] = Query(None, description="ID сервиса для фильтрации")):
     # Если указан id, находим и возвращаем услугу по id
@@ -60,7 +91,8 @@ async def get_services(
         data = ref.get()
 
         if not data:
-            raise HTTPException(status_code=404, detail="Услуга по указанному id не найдена.")
+            raise HTTPException(
+                status_code=404, detail="Услуга по указанному id не найдена.")
 
         return [data]
 
@@ -75,6 +107,7 @@ async def get_services(
     services = list(data.values())
 
     return services
+
 
 @router.post('/add',
              summary="Добавление новой услуги.",
@@ -99,17 +132,20 @@ async def add_new_service(
 ):
     # Проверка пользователя на авторизованность
     if uid != current_user['uid']:
-        raise HTTPException(status_code=401, details="Неиндентифицированный пользователь.")
-    
+        raise HTTPException(
+            status_code=401, details="Неиндентифицированный пользователь.")
+
     # Проверка существования категории сервиса
     service_category = await get_services_categories(id=service_category_id)
     if not service_category:
-        raise HTTPException(status_code=404, detail="Категория сервиса не найдена")
+        raise HTTPException(
+            status_code=404, detail="Категория сервиса не найдена")
 
     # Проверка существования способа оплаты, если указан
     if payment_method_id:
         if not get_payment_method(payment_method_id):
-            raise HTTPException(status_code=404, detail="Такой способа оплаты не найдено.")
+            raise HTTPException(
+                status_code=404, detail="Такой способа оплаты не найдено.")
 
     # Генерация уникального идентификатора для нового сервиса
     service_id = shortuuid.uuid()
@@ -119,7 +155,7 @@ async def add_new_service(
         if db.reference(f'/services/{service_id}').get() is not None:
             return check_id_unique(shortuuid.uuid())
         return service_id
-        
+
     service_id = check_id_unique(service_id)
 
     # Загрузка картинки в Firebase Storage
@@ -129,7 +165,6 @@ async def add_new_service(
 
     # Получение публичного URL загруженной картинки
     picture_url = blob.public_url
-
 
     # Сохранение информации о новой услуге в базу данных
     service_data = {
@@ -142,7 +177,7 @@ async def add_new_service(
         'lon': lon,
         'description': description,
         'price': price,
-        'currency':currency,
+        'currency': currency,
         'owner_id': uid,
         'date': date,
         'email': email,
@@ -162,6 +197,7 @@ async def add_new_service(
     db.reference(f'/services/{service_id}').set(service_data)
 
     return {"message": "Услуга успешно добавлена", "service": service_data}
+
 
 @router.put('/update',
             summary="Обновление сервиса.",
@@ -188,7 +224,8 @@ async def update_service(
 
     # Проверяем, что owner_id сервиса совпадает с uid текущего пользователя
     if service.get('owner_id') != uid or uid != current_user['uid']:
-        raise HTTPException(status_code=403, detail="У вас нет прав для обновления этого сервиса.")
+        raise HTTPException(
+            status_code=403, detail="У вас нет прав для обновления этого сервиса.")
 
     # Обновляем данные сервиса, которые были переданы в запросе
     updated_data = {}
@@ -234,7 +271,7 @@ async def delete_service(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    
+
     request_data = await request.json()
     uid = request_data.get('uid')
     service_id = request_data.get('service_id')
@@ -246,7 +283,8 @@ async def delete_service(
 
     # Проверяем, что owner_id сервиса совпадает с uid текущего пользователя
     if service.get('owner_id') != uid or uid != current_user['uid']:
-        raise HTTPException(status_code=403, detail="У вас нет прав для удаления этого сервиса.")
+        raise HTTPException(
+            status_code=403, detail="У вас нет прав для удаления этого сервиса.")
 
     # Удаляем картинки, связанные с услугой
     picture_url = service.get('picture_url')
@@ -258,25 +296,28 @@ async def delete_service(
 
     return {"message": "Сервис успешно удален"}
 
+
 @router.post('/book_service',
              summary="Бронирование услуги.",
              description=services_documentation.book_service)
 async def book_service(
     request: Request,
     current_user: dict = Depends(get_current_user),
-):  
+):
     request_data = await request.json()
     uid = request_data.get('uid')
     service_id = request_data.get('service_id')
     date = request_data.get('date')
     time = request_data.get('time')
-    
+
     if current_user['uid'] != uid:
-        raise HTTPException(status_code=401, details="Неиндентифицированный пользователь.")
+        raise HTTPException(
+            status_code=401, details="Неиндентифицированный пользователь.")
 
     # Проверяем чтобы пользователь не был владельцем объявления
     if db.reference(f'/services/{service_id}').get()['owner_id'] == uid:
-        raise HTTPException(status_code=401, details="Владелец не может забронировать.")
+        raise HTTPException(
+            status_code=401, details="Владелец не может забронировать.")
 
     # Генерация индетфикатора
     booking_id = shortuuid.uuid()
@@ -286,7 +327,7 @@ async def book_service(
         if db.reference(f'/booking_services/{booking_id}').get() is not None:
             return check_id_unique(shortuuid.uuid())
         return booking_id
-        
+
     booking_id = check_id_unique(booking_id)
 
     # Сохранение информации о новой услуге в базу данных
