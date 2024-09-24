@@ -1,0 +1,11 @@
+version: '3.7'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./firebase_conf:/app/firebase_conf
+    environment:
+      - FIREBASE_CONFIG_PATH=/app/firebase_conf/firebase_config.json

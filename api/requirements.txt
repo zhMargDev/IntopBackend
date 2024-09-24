@@ -1,28 +1,16 @@
-# FastAPI and ASGI server
-fastapi
 uvicorn[standard]
+fastapi
 firebase-admin
-pyrebase
-
-# SQLAlchemy and database drivers
+pyrebase4
+requests
+pydantic
 sqlalchemy
-alembic
+passlib
 psycopg2-binary
 pydantic[email]
-
-# .env file management
-python-dotenv
-
-# JWT for authentication
 jose
-pyjwt
 python-jose
-
-# Starlette (dependency for FastAPI)
-starlette
-
-python-multipart
-
-requests
-passlib
 redis
+shortuuid
+python-multipart
+geopy
