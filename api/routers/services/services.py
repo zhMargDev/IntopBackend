@@ -55,26 +55,40 @@ async def get_services_by_filters(
 ):
     filters.to_int_fields()
     py_db = firebase.database()
-    # Получаем услуги
+
+    # Get services
     services_ref = py_db.child("services").get()
     services = services_ref.val() or {}
 
     filtered_services = []
     for service_id, service_data in services.items():
-        if (
-            (filters.category_id is None or service_data["service_category_id"] == filters.category_id) and
-            (filters.payment_method_id is None or service_data["payment_method_id"] == filters.payment_method_id) and
-            (filters.minPrice is None or service_data["price"] >= filters.minPrice) and
-            (filters.maxPrice is None or service_data["price"]
-             <= filters.maxPrice) and
-            (filters.lat is not None and filters.lon is not None and filters.distance is not None)
-        ):
-            service_lat = service_data["lat"]
-            service_lon = service_data["lon"]
-            distance_km = calculate_distance(
-                filters.lat, filters.lon, service_lat, service_lon)
-            if distance_km <= filters.distance:
-                filtered_services.append(service_data)
+        # Filter based on non-null and non-'null' filter values
+        include_service = True
+        if filters.category_id is not None and filters.category_id != 'null':
+            include_service &= service_data.get(
+                "service_category_id", None) == filters.category_id
+        if filters.payment_method_id is not None and filters.payment_method_id != 'null':
+            include_service &= service_data.get(
+                "payment_method_id", None) == filters.payment_method_id
+        if filters.minPrice is not None and filters.minPrice != 'null':
+            service_price = service_data.get("price", None)
+            include_service &= service_price is not None and service_price >= filters.minPrice
+        if filters.maxPrice is not None and filters.maxPrice != 'null':
+            service_price = service_data.get("price", None)
+            include_service &= service_price is not None and service_price <= filters.maxPrice
+
+        # Filter by location if lat, lon, and distance are provided
+        if include_service and filters.lat is not None and filters.lon is not None and filters.distance is not None:
+            service_lat = service_data.get("lat", None)
+            service_lon = service_data.get("lon", None)
+            if service_lat is not None and service_lon is not None:
+                distance_km = await calculate_distance(
+                    filters.lat, filters.lon, service_lat, service_lon)
+                include_service &= distance_km <= filters.distance
+
+        # Add service to filtered list if all conditions are met
+        if include_service:
+            filtered_services.append(service_data)
 
     return filtered_services
 
