@@ -86,6 +86,12 @@ async def get_services_by_filters(
                     filters.lat, filters.lon, service_lat, service_lon)
                 include_service &= distance_km <= filters.distance
 
+        # Filter by name (case-insensitive)
+        if include_service and filters.name is not None and filters.name != 'null':
+            service_name = service_data.get("name", None)
+            if service_name is not None:
+                include_service &= filters.name.lower() in service_name.lower()
+
         # Add service to filtered list if all conditions are met
         if include_service:
             filtered_services.append(service_data)
